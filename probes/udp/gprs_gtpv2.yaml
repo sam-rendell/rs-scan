@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 8, 0 match rules)
+name: gprs_gtpv2
+protocol: udp
+ports: [2123, 2152]
+hello: "N\x01\x00\x04\xde\xfe\xc8\x00"
+recv_bytes: 512

@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 4, 36 match rules)
+name: nbtstat
+protocol: udp
+ports: [137]
+hello: "\x80\xf0\x00\x10\x00\x01\x00\x00\x00\x00\x00\x00 CKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\x00\x00!\x00\x01"
+recv_bytes: 512

@@ -1,0 +1,7 @@
+# Erlang Port Mapper Daemon — lists registered Erlang nodes
+# Found with RabbitMQ, CouchDB, ejabberd, any Erlang/Elixir service
+name: epmd
+protocol: tcp
+ports: [4369]
+hello: "\x00\x01\x6e"
+recv_bytes: 512

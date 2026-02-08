@@ -1,0 +1,6 @@
+# NATS messaging — passive grab, server sends "INFO {...}\r\n" immediately
+# Reveals server_id, version, cluster info, auth requirements
+name: nats
+protocol: tcp
+ports: [4222, 4223, 6222]
+recv_bytes: 2048

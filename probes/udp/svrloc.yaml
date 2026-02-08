@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 8, 1 match rules)
+name: svrloc
+protocol: udp
+ports: [427]
+hello: "\x02\x01\x00\x006 \x00\x00\x00\x00\x00\x01\x00\x02en\x00\x00\x00\x15service:service-agent\x00\x07default\x00\x00\x00\x00"
+recv_bytes: 512

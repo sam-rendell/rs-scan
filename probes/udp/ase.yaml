@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 9, 1 match rules)
+name: ase
+protocol: udp
+ports: [1258, 2126, 3123, 12444, 13200, 23196, 27138, 27244, 27777, 28138]
+hello: "s"
+recv_bytes: 512

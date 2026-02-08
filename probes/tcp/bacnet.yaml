@@ -1,0 +1,7 @@
+# BACnet/IP over TCP — building automation (HVAC, access control, lighting)
+# ReadProperty request for Device Object Identifier
+name: bacnet
+protocol: tcp
+ports: [47808]
+hello: "\x81\x0a\x00\x11\x01\x04\x00\x05\x01\x0c\x0c\x02\x3f\xff\xff\x19\x4b"
+recv_bytes: 512

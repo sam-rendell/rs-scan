@@ -1,0 +1,6 @@
+# IRC — most servers send NOTICE on connect; hello triggers full banner if silent
+name: irc
+protocol: tcp
+ports: [6667, 6668, 6669, 6697, 7000, 7070]
+hello: "NICK scan\r\nUSER scan 0 * :scan\r\n"
+recv_bytes: 1024

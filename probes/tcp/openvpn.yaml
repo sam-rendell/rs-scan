@@ -1,0 +1,6 @@
+# OpenVPN TCP — initial hard reset client v2 packet
+name: openvpn
+protocol: tcp
+ports: [1194, 1195]
+hello: "\x00\x0e\x38\x01\x02\x03\x04\x05\x06\x07\x08\x00\x00\x00\x00\x00"
+recv_bytes: 256

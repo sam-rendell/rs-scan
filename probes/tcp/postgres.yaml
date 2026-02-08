@@ -1,0 +1,6 @@
+name: postgres
+protocol: tcp
+ports: [5432]
+# PostgreSQL startup message: protocol version 3.0, user "rs_scan"
+hello: "\x00\x00\x00\x27\x00\x03\x00\x00user\x00rs_scan\x00database\x00postgres\x00\x00"
+recv_bytes: 512

@@ -1,0 +1,6 @@
+# EtherNet/IP List Identity request — Rockwell/Allen-Bradley PLCs, ICS devices
+name: ethernetip
+protocol: tcp
+ports: [44818]
+hello: "\x63\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+recv_bytes: 512

@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 9, 1 match rules)
+name: airhid
+protocol: udp
+ports: [13246]
+hello: "from:airhid"
+recv_bytes: 512

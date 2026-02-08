@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 8, 0 match rules)
+name: ut2k_ping
+protocol: udp
+ports: [7777]
+hello: "None\x00"
+recv_bytes: 512

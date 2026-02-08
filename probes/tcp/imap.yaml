@@ -1,0 +1,4 @@
+name: imap
+protocol: tcp
+ports: [143]
+recv_bytes: 512

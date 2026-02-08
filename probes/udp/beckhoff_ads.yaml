@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 8, 0 match rules)
+name: beckhoff_ads
+protocol: udp
+ports: [48899]
+hello: "\x03f\x14q\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x01\x01\x10'\x00\x00\x00\x00"
+recv_bytes: 512

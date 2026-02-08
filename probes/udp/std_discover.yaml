@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 8, 0 match rules)
+name: std_discover
+protocol: udp
+ports: [6481]
+hello: "[PROBE] 0000"
+recv_bytes: 512

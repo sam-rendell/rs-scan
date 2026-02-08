@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 9, 1 match rules)
+name: backorifice
+protocol: udp
+ports: [31337]
+hello: "\xcec\xd1\xd2\x16\xe7\x13\xcf8\xa5\xa5\x86\xb2uK\x99\xaa2X"
+recv_bytes: 512

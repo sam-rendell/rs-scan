@@ -1,0 +1,6 @@
+# MQTT CONNECT packet (protocol v4, client "scan")
+name: mqtt
+protocol: tcp
+ports: [1883, 8883]
+hello: "\x10\x10\x00\x04MQTT\x04\x02\x00\x1e\x00\x04scan"
+recv_bytes: 256

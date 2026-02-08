@@ -1,0 +1,6 @@
+# Niagara Fox — Tridium building automation framework
+name: fox
+protocol: tcp
+ports: [1911, 4911]
+hello: "fox a 1 -1 fox hello\n{\nfox.version=s:1.0\nid=i:1\n};;\n"
+recv_bytes: 1024

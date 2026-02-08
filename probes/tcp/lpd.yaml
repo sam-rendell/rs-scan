@@ -1,0 +1,6 @@
+# LPD (Line Printer Daemon) — list queue request
+name: lpd
+protocol: tcp
+ports: [515]
+hello: "\x01default\n"
+recv_bytes: 256

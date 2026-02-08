@@ -1,0 +1,6 @@
+# Apache JServ Protocol (AJP13) CPing
+name: ajp
+protocol: tcp
+ports: [8009, 8109]
+hello: "\x12\x34\x00\x01\x0a"
+recv_bytes: 256

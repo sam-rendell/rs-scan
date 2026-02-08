@@ -1,0 +1,4 @@
+name: mysql
+protocol: tcp
+ports: [3306, 3307]
+recv_bytes: 512

@@ -1,0 +1,7 @@
+# Zookeeper "srvr" four-letter command — returns server stats, version, mode
+# Used by Kafka, Hadoop, Solr, HBase clusters
+name: zookeeper
+protocol: tcp
+ports: [2181, 2182]
+hello: "srvr\n"
+recv_bytes: 1024

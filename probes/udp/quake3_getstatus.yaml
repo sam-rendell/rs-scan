@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 8, 10 match rules)
+name: quake3_getstatus
+protocol: udp
+ports: [26000, 26001, 26002, 26003, 26004, 27961, 27962, 27963, 27964, 30720, 30721, 30722, 30723, 30724, 44400]
+hello: "\xff\xff\xff\xffgetstatus"
+recv_bytes: 512

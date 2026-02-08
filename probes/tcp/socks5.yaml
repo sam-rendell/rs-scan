@@ -1,0 +1,6 @@
+# SOCKS5 greeting (methods: none, gssapi, user/pass, private)
+name: socks5
+protocol: tcp
+ports: [1080, 1081, 9050, 9150]
+hello: "\x05\x04\x00\x01\x02\x80"
+recv_bytes: 256

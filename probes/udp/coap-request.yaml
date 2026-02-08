@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 9, 1 match rules)
+name: coap-request
+protocol: udp
+ports: [5683]
+hello: "@\x01\x01\xce\xbb.well-known\x04core"
+recv_bytes: 512

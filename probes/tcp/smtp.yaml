@@ -1,0 +1,4 @@
+name: smtp
+protocol: tcp
+ports: [25, 587, 465]
+recv_bytes: 512

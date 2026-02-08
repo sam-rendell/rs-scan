@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 3, 17 match rules)
+name: help
+protocol: udp
+ports: [7, 13, 37, 42]
+hello: "help\r\n\r\n"
+recv_bytes: 512

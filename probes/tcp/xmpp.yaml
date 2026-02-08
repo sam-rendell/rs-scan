@@ -1,0 +1,7 @@
+# XMPP stream open — Jabber, ejabberd, Prosody, Openfire, IoT XMPP
+# Server responds with stream:features (TLS, SASL, compression)
+name: xmpp
+protocol: tcp
+ports: [5222, 5223, 5269, 5280]
+hello: "<?xml version='1.0'?><stream:stream to='localhost' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams' version='1.0'>"
+recv_bytes: 2048

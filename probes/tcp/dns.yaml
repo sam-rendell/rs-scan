@@ -1,0 +1,6 @@
+# DNS version.bind query over TCP (length-prefixed)
+name: dns
+protocol: tcp
+ports: [53, 5353]
+hello: "\x00\x1e\x00\x06\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x07version\x04bind\x00\x00\x10\x00\x03"
+recv_bytes: 512

@@ -1,0 +1,4 @@
+name: vnc
+protocol: tcp
+ports: [5900, 5901, 5902]
+recv_bytes: 256

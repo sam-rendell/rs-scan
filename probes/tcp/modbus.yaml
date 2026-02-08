@@ -1,0 +1,7 @@
+# Modbus TCP Read Device Identification (function 0x2B, MEI type 0x0E)
+# ICS/SCADA — PLCs, RTUs, HMIs
+name: modbus
+protocol: tcp
+ports: [502]
+hello: "\x00\x01\x00\x00\x00\x05\x00\x2b\x0e\x01\x00"
+recv_bytes: 512

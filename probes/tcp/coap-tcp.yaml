@@ -1,0 +1,7 @@
+# CoAP over TCP — IoT Constrained Application Protocol
+# CSM (Capabilities and Settings Message)
+name: coap-tcp
+protocol: tcp
+ports: [5683, 5684]
+hello: "\x40\x01\x01\xce\xbb.well-known\x04core"
+recv_bytes: 512

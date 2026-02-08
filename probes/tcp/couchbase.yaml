@@ -1,0 +1,6 @@
+# Couchbase memcached binary protocol — SASL list mechanisms
+name: couchbase
+protocol: tcp
+ports: [11210, 11207]
+hello: "\x80\x20\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+recv_bytes: 512

@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 8, 3 match rules)
+name: memcached
+protocol: udp
+ports: [11211]
+hello: "\x00\x01\x00\x00\x00\x01\x00\x00stats\r\n"
+recv_bytes: 512

@@ -1,0 +1,7 @@
+# HAProxy stats — common monitoring endpoint
+# Also works for any HTTP admin interface on these ports
+name: haproxy-stats
+protocol: tcp
+ports: [1936, 9600]
+hello: "GET /stats HTTP/1.0\r\nHost: localhost\r\n\r\n"
+recv_bytes: 2048

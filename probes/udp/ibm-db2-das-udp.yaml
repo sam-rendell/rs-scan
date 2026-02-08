@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 8, 1 match rules)
+name: ibm-db2-das-udp
+protocol: udp
+ports: [523]
+hello: "DB2GETADDR\x00SQL08010\x00"
+recv_bytes: 512

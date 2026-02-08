@@ -1,0 +1,6 @@
+# Java RMI — deserialization attacks, common in enterprise Java
+name: java-rmi
+protocol: tcp
+ports: [1099, 1098]
+hello: "\x4a\x52\x4d\x49\x00\x02\x4b"
+recv_bytes: 512

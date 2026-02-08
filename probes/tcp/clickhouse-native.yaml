@@ -1,0 +1,6 @@
+# ClickHouse native protocol — hello packet
+name: clickhouse-native
+protocol: tcp
+ports: [9440]
+hello: "\x00\x1crs_scan\x12\x01\x01\x00\x00\x00\x00\x00\x07default\x00\x00"
+recv_bytes: 1024

@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 6, 1 match rules)
+name: quic
+protocol: udp
+ports: [80]
+hello: "\r\x89\xc1\x9c\x1c*\xff\xfc\xf1Q999\x00"
+recv_bytes: 2048

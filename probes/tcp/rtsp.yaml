@@ -1,0 +1,6 @@
+# RTSP OPTIONS — IP cameras, media servers
+name: rtsp
+protocol: tcp
+ports: [554, 8554, 8555]
+hello: "OPTIONS * RTSP/1.0\r\nCSeq: 1\r\nUser-Agent: rs_scan\r\n\r\n"
+recv_bytes: 1024

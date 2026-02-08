@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 8, 1 match rules)
+name: pc-anywhere
+protocol: udp
+ports: [5632]
+hello: "NQ"
+recv_bytes: 512

@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 8, 1 match rules)
+name: vuze-dht
+protocol: udp
+ports: [17555, 49152, 49153, 49154, 49155, 49156]
+hello: "\xff\xf0\x97\r.`\xd1o\x00\x00\x04\x00\x00U\xab\xec2\x00\x00\x00\x00\x002\x04\n\x00\xc8u\xf8\x16\x00\\\xb9e\x00\x00\x00\x00N\xd1\xf5("
+recv_bytes: 512

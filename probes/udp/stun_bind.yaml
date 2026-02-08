@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 8, 0 match rules)
+name: stun_bind
+protocol: udp
+ports: [3478]
+hello: "\x00\x01\x00\x00!\x12\xa4B\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+recv_bytes: 256

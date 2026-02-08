@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 5, 19 match rules)
+name: dnsstatusrequest
+protocol: udp
+ports: [135, 1761]
+hello: "\x00\x00\x10\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+recv_bytes: 512

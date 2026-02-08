@@ -1,0 +1,7 @@
+# HP PJL (Printer Job Language) INFO ID request
+# Printers, MFPs — reveals make, model, firmware
+name: pjl
+protocol: tcp
+ports: [9100, 9101, 9102]
+hello: "\x1b%-12345X@PJL INFO ID\r\n\x1b%-12345X\r\n"
+recv_bytes: 512

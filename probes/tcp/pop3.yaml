@@ -1,0 +1,4 @@
+name: pop3
+protocol: tcp
+ports: [110]
+recv_bytes: 256

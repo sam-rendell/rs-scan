@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 9, 1 match rules)
+name: ventrilo
+protocol: udp
+ports: [3784]
+hello: "\x01\xe7\xe5u1\xa3\x17\x0b!\xcf\xbf+\x99N\xdd\x19\xac\xde\x08_\x8b$\n\x11\x19\xb6so\xad(\x13\xd2\n\xb9\x12u"
+recv_bytes: 512

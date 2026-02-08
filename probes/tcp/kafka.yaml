@@ -1,0 +1,7 @@
+# Kafka broker ApiVersions request (API key 18, v0)
+# Returns supported API versions — identifies Kafka and version
+name: kafka
+protocol: tcp
+ports: [9092, 9093, 9094]
+hello: "\x00\x00\x00\x23\x00\x12\x00\x00\x00\x00\x00\x01\x00\x0crs_scan-0001\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+recv_bytes: 2048

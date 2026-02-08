@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 6, 7 match rules)
+name: xdmcp
+protocol: udp
+ports: [177]
+hello: "\x00\x01\x00\x02\x00\x01\x00"
+recv_bytes: 512

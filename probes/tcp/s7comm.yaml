@@ -1,0 +1,7 @@
+# Siemens S7comm COTP Connection Request — Siemens S7 PLCs
+# ICS/SCADA: S7-300, S7-400, S7-1200, S7-1500
+name: s7comm
+protocol: tcp
+ports: [102]
+hello: "\x03\x00\x00\x16\x11\xe0\x00\x00\x00\x01\x00\xc0\x01\x0a\xc1\x02\x01\x00\xc2\x02\x01\x02"
+recv_bytes: 512

@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 8, 1 match rules)
+name: ipmi-rmcp
+protocol: udp
+ports: [623]
+hello: "\x06\x00\xff\x07\x00\x00\x00\x00\x00\x00\x00\x00\x00\t \x18\xc8\x81\x008\x8e\x04\xb5"
+recv_bytes: 256

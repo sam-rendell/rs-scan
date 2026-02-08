@@ -1,0 +1,7 @@
+# Git protocol — git:// transport, needs request to get response
+# Detects exposed git repos (source code leak)
+name: git
+protocol: tcp
+ports: [9418]
+hello: "0039git-upload-pack /\x00host=localhost\x00\x00version=1\x00"
+recv_bytes: 1024

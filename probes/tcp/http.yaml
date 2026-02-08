@@ -1,0 +1,32 @@
+name: http-get
+protocol: tcp
+ports: [
+  # Standard HTTP
+  80, 8080, 8000, 8888, 8081, 8008, 8083, 3000, 5000, 3128,
+  # Infrastructure APIs (respond to HTTP GET)
+  631,        # CUPS
+  2379, 2381, # etcd + metrics
+  4200,       # CrateDB
+  5601,       # Kibana
+  5984,       # CouchDB
+  5985,       # WinRM HTTP
+  7474,       # Neo4j
+  7681,       # websocketd
+  8001,       # k8s kubectl proxy
+  8089,       # Splunk management
+  8123,       # ClickHouse HTTP
+  8200,       # HashiCorp Vault
+  8291,       # MikroTik API
+  8500,       # Consul
+  8834,       # Nessus
+  8983,       # Apache Solr
+  9000,       # MinIO / SonarQube
+  9090,       # Prometheus
+  9200,       # Elasticsearch
+  10000,      # Webmin
+  10255,      # Kubelet read-only HTTP
+  15672,      # RabbitMQ management
+  19999       # Netdata
+]
+hello: "GET / HTTP/1.0\r\nHost: localhost\r\nUser-Agent: rs_scan/1.0\r\nAccept: */*\r\n\r\n"
+recv_bytes: 4096

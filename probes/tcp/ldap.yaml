@@ -1,0 +1,6 @@
+# LDAP anonymous simple bind request
+name: ldap
+protocol: tcp
+ports: [389, 3268]
+hello: "\x30\x0c\x02\x01\x01\x60\x07\x02\x01\x02\x04\x00\x80\x00"
+recv_bytes: 1024

@@ -1,0 +1,13 @@
+name: telnet
+protocol: tcp
+ports: [23, 2323]
+recv_bytes: 512
+negotiate:
+  rules:
+    - when: ["0xff", "0xfb", "_"]
+      reply: ["0xff", "0xfe", "$1"]
+    - when: ["0xff", "0xfd", "_"]
+      reply: ["0xff", "0xfc", "$1"]
+  max_rounds: 10
+  max_bytes: 2048
+  escape_on: ["0x00"]

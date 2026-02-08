@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 8, 2 match rules)
+name: serialnumberd
+protocol: udp
+ports: [626]
+hello: "SNQUERY: 127.0.0.1:AAAAAA:xsvr"
+recv_bytes: 512

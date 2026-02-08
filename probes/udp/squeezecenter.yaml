@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 8, 1 match rules)
+name: squeezecenter
+protocol: udp
+ports: [3483]
+hello: "eIPAD\x00NAME\x00JSON\x00VERS\x00UUID\x00JVID\x06\x124Vx\x124"
+recv_bytes: 512

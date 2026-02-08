@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 6, 8 match rules)
+name: sqlping
+protocol: udp
+ports: [1434, 19131, 19132, 19133]
+hello: "\x02"
+recv_bytes: 512

@@ -1,0 +1,6 @@
+# Docker daemon API version endpoint
+name: docker
+protocol: tcp
+ports: [2375, 2376]
+hello: "GET /version HTTP/1.1\r\nHost: localhost\r\n\r\n"
+recv_bytes: 2048

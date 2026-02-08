@@ -1,0 +1,7 @@
+# Cassandra Native Protocol v4 STARTUP frame
+# Requests CQL_VERSION 3.0.0 — server responds with READY or AUTHENTICATE
+name: cassandra
+protocol: tcp
+ports: [9042, 9160]
+hello: "\x04\x00\x00\x00\x01\x00\x00\x00\x16\x00\x01\x00\x0bCQL_VERSION\x00\x053.0.0"
+recv_bytes: 1024

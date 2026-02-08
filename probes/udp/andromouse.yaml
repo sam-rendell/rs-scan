@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 9, 1 match rules)
+name: andromouse
+protocol: udp
+ports: [8888]
+hello: "AMSNIFF"
+recv_bytes: 512

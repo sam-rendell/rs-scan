@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 9, 1 match rules)
+name: quake3_master_getservers
+protocol: udp
+ports: [27950, 30710]
+hello: "\xff\xff\xff\xffgetservers 68 empty full"
+recv_bytes: 512

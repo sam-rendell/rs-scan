@@ -1,0 +1,5 @@
+# Rsync daemon — passive grab, server sends "@RSYNCD: 31.0\n" on connect
+name: rsync
+protocol: tcp
+ports: [873]
+recv_bytes: 256

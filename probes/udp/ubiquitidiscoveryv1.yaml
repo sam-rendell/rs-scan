@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 9, 4 match rules)
+name: ubiquitidiscoveryv1
+protocol: udp
+ports: [10001]
+hello: "\x01\x00\x00\x00"
+recv_bytes: 512

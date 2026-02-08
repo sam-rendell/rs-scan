@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 9, 0 match rules)
+name: trin00_win_ping
+protocol: udp
+ports: [34555]
+hello: "png []..Ks"
+recv_bytes: 512

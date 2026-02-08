@@ -1,0 +1,4 @@
+name: ssh
+protocol: tcp
+ports: [22, 2222, 22222]
+recv_bytes: 256

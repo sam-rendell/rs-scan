@@ -1,0 +1,7 @@
+# DNP3 (Distributed Network Protocol) — SCADA/utility infrastructure
+# Data link layer request with function code 0 (confirm)
+name: dnp3
+protocol: tcp
+ports: [20000]
+hello: "\x05\x64\x05\xc0\x01\x00\x00\x00\x00\x04\xe9\x21"
+recv_bytes: 256

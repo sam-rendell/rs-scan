@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 9, 1 match rules)
+name: murmur
+protocol: udp
+ports: [64738]
+hello: "\x00\x00\x00\x00abcdefgh"
+recv_bytes: 512

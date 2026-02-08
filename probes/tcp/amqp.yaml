@@ -1,0 +1,7 @@
+# AMQP 0-9-1 protocol header — RabbitMQ, ActiveMQ, Qpid
+# Server responds with Connection.Start containing version, platform, mechanisms
+name: amqp
+protocol: tcp
+ports: [5672]
+hello: "AMQP\x00\x00\x09\x01"
+recv_bytes: 1024

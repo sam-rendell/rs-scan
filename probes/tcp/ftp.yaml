@@ -1,0 +1,4 @@
+name: ftp
+protocol: tcp
+ports: [21]
+recv_bytes: 512

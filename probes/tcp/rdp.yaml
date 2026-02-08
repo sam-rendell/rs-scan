@@ -1,0 +1,6 @@
+name: rdp
+protocol: tcp
+ports: [3389]
+# RDP Connection Request (X.224)
+hello: "\x03\x00\x00\x2d\x28\xe0\x00\x00\x00\x00\x00Cookie: mstshash=rs_scan\r\n\x01\x00\x08\x00\x03\x00\x00\x00"
+recv_bytes: 512

@@ -1,0 +1,5 @@
+# SVN protocol — passive grab, server sends "( success ( 2 2 ... ) )" capabilities
+name: svn
+protocol: tcp
+ports: [3690]
+recv_bytes: 1024

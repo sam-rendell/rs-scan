@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 9, 0 match rules)
+name: trin00_unix_ping
+protocol: udp
+ports: [27444]
+hello: "png l44adsl"
+recv_bytes: 512

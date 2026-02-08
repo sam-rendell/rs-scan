@@ -1,0 +1,6 @@
+# Memcached stats command
+name: memcached
+protocol: tcp
+ports: [11211]
+hello: "stats\r\n"
+recv_bytes: 2048

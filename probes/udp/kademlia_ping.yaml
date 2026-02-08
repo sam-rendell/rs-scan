@@ -1,0 +1,6 @@
+# Generated from nmap-service-probes (rarity 8, 0 match rules)
+name: kademlia_ping
+protocol: udp
+ports: [4665, 4666, 4672, 6429]
+hello: "\xe4`"
+recv_bytes: 512
