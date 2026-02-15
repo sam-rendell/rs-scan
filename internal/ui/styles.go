@@ -35,9 +35,7 @@ var (
 	styleTabActive   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("0")).Background(lipgloss.Color("10"))
 	styleTabInactive = lipgloss.NewStyle().Faint(true)
 
-	// Heatmap
-	styleHeatHigh = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))  // bright green: >10
-	styleHeatMed  = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))   // dark green: 3-10
-	styleHeatLow  = lipgloss.NewStyle().Foreground(lipgloss.Color("22"))  // dim green: 1-2
-	styleHeatNone = lipgloss.NewStyle().Foreground(lipgloss.Color("238")) // dark gray: scanned, 0
+	// Service view
+	styleServiceCat = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true) // blue: category
+	styleHostRef    = lipgloss.NewStyle().Foreground(lipgloss.Color("250")).Faint(true)
 )

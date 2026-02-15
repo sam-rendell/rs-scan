@@ -35,7 +35,7 @@ func BenchmarkArenaGet(b *testing.B) {
 
 func BenchmarkTXRingEnqueue(b *testing.B) {
 	ring := NewTXRing(65536)
-	req := TXRequest{DstIP: 0x0A000001, SrcPort: 40000, DstPort: 80, Seq: 1, Ack: 1, Flags: FlagACK}
+	req := TXRequest{DstIP: u32ToStackIPAddr(0x0A000001), SrcPort: 40000, DstPort: 80, Seq: 1, Ack: 1, Flags: FlagACK}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if !ring.Enqueue(req) {
@@ -47,7 +47,7 @@ func BenchmarkTXRingEnqueue(b *testing.B) {
 
 func BenchmarkTXRingEnqueueDrain(b *testing.B) {
 	ring := NewTXRing(1024)
-	req := TXRequest{DstIP: 0x0A000001, SrcPort: 40000, DstPort: 80, Seq: 1, Ack: 1, Flags: FlagACK}
+	req := TXRequest{DstIP: u32ToStackIPAddr(0x0A000001), SrcPort: 40000, DstPort: 80, Seq: 1, Ack: 1, Flags: FlagACK}
 	batch := make([]TXRequest, 256)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -85,13 +85,13 @@ func BenchmarkEngineHandleSynAck(b *testing.B) {
 	running := int32(1)
 	engine := NewEngine(EngineConfig{
 		Arena: arena, TXRing: txRing, Probes: pt, ConnTable: connTable,
-		SrcIP: 0xC0A80001, Output: output, Phase1MS: 500, Running: &running,
+		SrcIP: u32ToStackIPAddr(0xC0A80001), Output: output, Phase1MS: 500, Running: &running,
 	})
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		state := &stack.State{
-			SrcIP: 0xC0A80001, DstIP: uint32(0x0A000000 + i),
+			SrcIP: u32ToStackIPAddr(0xC0A80001), DstIP: u32ToStackIPAddr(uint32(0x0A000000 + i)),
 			SrcPort: uint16(40000 + i%20000), DstPort: 80,
 			Status: stack.StatusSynSent, Seq: uint32(i), Ack: uint32(i + 1),
 		}
@@ -113,7 +113,7 @@ func BenchmarkEngineHandleData(b *testing.B) {
 	running := int32(1)
 	engine := NewEngine(EngineConfig{
 		Arena: arena, TXRing: txRing, Probes: pt, ConnTable: connTable,
-		SrcIP: 0xC0A80001, Output: output, Phase1MS: 500, Running: &running,
+		SrcIP: u32ToStackIPAddr(0xC0A80001), Output: output, Phase1MS: 500, Running: &running,
 	})
 
 	// Pre-allocate states with arena slots
@@ -121,7 +121,7 @@ func BenchmarkEngineHandleData(b *testing.B) {
 	for i := 0; i < 10000; i++ {
 		idx, _, _ := arena.Alloc()
 		states[i] = &stack.State{
-			SrcIP: 0xC0A80001, DstIP: uint32(0x0A000000 + i),
+			SrcIP: u32ToStackIPAddr(0xC0A80001), DstIP: u32ToStackIPAddr(uint32(0x0A000000 + i)),
 			SrcPort: uint16(40000 + i%20000), DstPort: 80,
 			Status: stack.StatusEstablished,
 			Seq: uint32(i), Ack: uint32(i + 1),

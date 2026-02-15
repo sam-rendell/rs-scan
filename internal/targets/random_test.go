@@ -53,7 +53,7 @@ func TestRandomCIDRIterator(t *testing.T) {
 	}
 
 	count := 0
-	lastIP := uint32(0)
+	lastIPU32 := uint32(0)
 	isSequential := true
 
 	for {
@@ -62,12 +62,13 @@ func TestRandomCIDRIterator(t *testing.T) {
 			break
 		}
 
+		ipU32 := IPAddrToUint32(ip)
 		if count > 0 {
-			if ip != lastIP+1 {
+			if ipU32 != lastIPU32+1 {
 				isSequential = false
 			}
 		}
-		lastIP = ip
+		lastIPU32 = ipU32
 		count++
 	}
 

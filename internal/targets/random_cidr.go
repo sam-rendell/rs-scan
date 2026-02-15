@@ -26,9 +26,9 @@ func NewRandomCIDRIterator(cidrStr string) (*RandomCIDRIterator, error) {
 	}, nil
 }
 
-func (it *RandomCIDRIterator) Next() (uint32, bool) {
+func (it *RandomCIDRIterator) Next() (IPAddr, bool) {
 	if it.count >= it.max {
-		return 0, false
+		return IPAddr{}, false
 	}
 
 	idx := it.count
@@ -36,20 +36,15 @@ func (it *RandomCIDRIterator) Next() (uint32, bool) {
 
 	offset := it.perm.Permute(idx)
 
-	return it.baseIP + uint32(offset), true
+	return IPToIPAddr(it.baseIP + uint32(offset)), true
 }
 
 func (it *RandomCIDRIterator) GetState() uint64 {
 	return it.count
 }
 
-func (it *RandomCIDRIterator) SetState(val uint64) {
-	it.count = val
-}
-
-func (it *RandomCIDRIterator) Seek(target uint32) {
-	// Seeking in a permuted stream requires decryption or linear scan.
-	// For checkpoint resume, treat target as the count index.
+func (it *RandomCIDRIterator) Seek(target IPAddr) {
+	// No-op: seeking in a permuted stream isn't meaningful.
 }
 
 func (it *RandomCIDRIterator) Split(n int) []Iterator {

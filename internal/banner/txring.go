@@ -1,13 +1,14 @@
 package banner
 
 import (
+	"rs_scan/internal/stack"
 	"sync"
 	"sync/atomic"
 )
 
 // TXRequest represents a response packet to be sent by the Response TX goroutine.
 type TXRequest struct {
-	DstIP   uint32
+	DstIP   stack.IPAddr
 	SrcPort uint16
 	DstPort uint16
 	Seq     uint32

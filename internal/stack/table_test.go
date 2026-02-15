@@ -8,8 +8,8 @@ import (
 func TestConnectionTable(t *testing.T) {
 	table := NewConnectionTable()
 
-	srcIP := uint32(1)
-	dstIP := uint32(2)
+	srcIP := u32ToIPAddr(1)
+	dstIP := u32ToIPAddr(2)
 	srcPort := uint16(100)
 	dstPort := uint16(80)
 
@@ -40,11 +40,13 @@ func TestConnectionTableNoCollision(t *testing.T) {
 	table := NewConnectionTable()
 
 	// Insert two entries that would collide under the old XOR hash
-	table.AddSynSent(1, 2, 100, 80, 111)
-	table.AddSynSent(2, 1, 100, 80, 222)
+	ip1 := u32ToIPAddr(1)
+	ip2 := u32ToIPAddr(2)
+	table.AddSynSent(ip1, ip2, 100, 80, 111)
+	table.AddSynSent(ip2, ip1, 100, 80, 222)
 
-	s1, ok1 := table.Get(1, 2, 100, 80)
-	s2, ok2 := table.Get(2, 1, 100, 80)
+	s1, ok1 := table.Get(ip1, ip2, 100, 80)
+	s2, ok2 := table.Get(ip2, ip1, 100, 80)
 
 	if !ok1 || !ok2 {
 		t.Fatal("Expected both entries to exist")
@@ -56,7 +58,9 @@ func TestConnectionTableNoCollision(t *testing.T) {
 
 func TestCleanup(t *testing.T) {
 	table := NewConnectionTable()
-	table.AddSynSent(1, 2, 100, 80, 0)
+	ip1 := u32ToIPAddr(1)
+	ip2 := u32ToIPAddr(2)
+	table.AddSynSent(ip1, ip2, 100, 80, 0)
 
 	// Should not expire yet
 	expired := table.Cleanup(5 * time.Second)
@@ -65,7 +69,7 @@ func TestCleanup(t *testing.T) {
 	}
 
 	// Should still be there
-	_, ok := table.Get(1, 2, 100, 80)
+	_, ok := table.Get(ip1, ip2, 100, 80)
 	if !ok {
 		t.Fatal("Entry should still exist")
 	}
@@ -75,8 +79,10 @@ func TestAddSynSent_ArenaSlotSentinel(t *testing.T) {
 	table := NewConnectionTable()
 
 	// Create 100 SynSent entries (no banner grab)
+	srcIP := u32ToIPAddr(1)
 	for i := uint32(0); i < 100; i++ {
-		table.AddSynSent(1, i+10, uint16(1024+i), 80, i)
+		dstIP := u32ToIPAddr(i + 10)
+		table.AddSynSent(srcIP, dstIP, uint16(1024+i), 80, i)
 	}
 
 	// Every SynSent entry must have ArenaSlot = NoArenaSlot.
@@ -84,7 +90,8 @@ func TestAddSynSent_ArenaSlotSentinel(t *testing.T) {
 	// try to free arena slot 0 for every expired entry, blocking
 	// the management goroutine.
 	for i := uint32(0); i < 100; i++ {
-		st, ok := table.Get(1, i+10, uint16(1024+i), 80)
+		dstIP := u32ToIPAddr(i + 10)
+		st, ok := table.Get(srcIP, dstIP, uint16(1024+i), 80)
 		if !ok {
 			t.Fatalf("entry %d not found", i)
 		}
@@ -100,8 +107,10 @@ func TestCleanupExpiredNoArenaSlot(t *testing.T) {
 	table := NewConnectionTable()
 
 	// Create entries and expire them immediately
+	srcIP := u32ToIPAddr(1)
 	for i := uint32(0); i < 50; i++ {
-		table.AddSynSent(1, i+10, uint16(1024+i), 80, i)
+		dstIP := u32ToIPAddr(i + 10)
+		table.AddSynSent(srcIP, dstIP, uint16(1024+i), 80, i)
 	}
 
 	// Let the coarse clock (1ms resolution) advance past the Updated timestamps
@@ -130,8 +139,10 @@ func TestCleanupConnDeadline(t *testing.T) {
 	table := NewConnectionTable()
 
 	// Add an entry and set a ConnDeadline in the past
-	table.AddSynSent(1, 2, 100, 80, 0)
-	st, ok := table.Get(1, 2, 100, 80)
+	ip1 := u32ToIPAddr(1)
+	ip2 := u32ToIPAddr(2)
+	table.AddSynSent(ip1, ip2, 100, 80, 0)
+	st, ok := table.Get(ip1, ip2, 100, 80)
 	if !ok {
 		t.Fatal("entry not found")
 	}
@@ -147,7 +158,7 @@ func TestCleanupConnDeadline(t *testing.T) {
 	}
 
 	// Verify entry was removed from table
-	_, ok = table.Get(1, 2, 100, 80)
+	_, ok = table.Get(ip1, ip2, 100, 80)
 	if ok {
 		t.Fatal("entry should have been removed by ConnDeadline")
 	}
@@ -159,8 +170,10 @@ func TestCleanupConnDeadline(t *testing.T) {
 func TestCleanupConnDeadlineNotExpiredEarly(t *testing.T) {
 	table := NewConnectionTable()
 
-	table.AddSynSent(1, 2, 100, 80, 0)
-	st, ok := table.Get(1, 2, 100, 80)
+	ip1 := u32ToIPAddr(1)
+	ip2 := u32ToIPAddr(2)
+	table.AddSynSent(ip1, ip2, 100, 80, 0)
+	st, ok := table.Get(ip1, ip2, 100, 80)
 	if !ok {
 		t.Fatal("entry not found")
 	}
@@ -182,13 +195,14 @@ func TestSweepRetransmit(t *testing.T) {
 	table := NewConnectionTable()
 
 	// Add entries in the UDP source port range (50000-60999)
-	table.AddSynSent(1, 10, 50000, 53, 100)   // UDP range
-	table.AddSynSent(1, 11, 50001, 161, 200)   // UDP range
-	table.AddSynSent(1, 12, 40000, 80, 300)    // TCP range — should be skipped
-	table.AddSynSent(1, 13, 50002, 443, 400)   // UDP range
+	srcIP := u32ToIPAddr(1)
+	table.AddSynSent(srcIP, u32ToIPAddr(10), 50000, 53, 100)   // UDP range
+	table.AddSynSent(srcIP, u32ToIPAddr(11), 50001, 161, 200)   // UDP range
+	table.AddSynSent(srcIP, u32ToIPAddr(12), 40000, 80, 300)    // TCP range — should be skipped
+	table.AddSynSent(srcIP, u32ToIPAddr(13), 50002, 443, 400)   // UDP range
 
 	// Mark one as Established — should be skipped (not SynSent)
-	st, _ := table.Get(1, 13, 50002, 443)
+	st, _ := table.Get(srcIP, u32ToIPAddr(13), 50002, 443)
 	st.Status = StatusEstablished
 
 	var swept []uint16
@@ -202,7 +216,7 @@ func TestSweepRetransmit(t *testing.T) {
 	}
 
 	// Verify NegRound was incremented
-	st1, _ := table.Get(1, 10, 50000, 53)
+	st1, _ := table.Get(srcIP, u32ToIPAddr(10), 50000, 53)
 	if st1.NegRound != 1 {
 		t.Errorf("NegRound should be 1 after first sweep, got %d", st1.NegRound)
 	}
@@ -224,14 +238,16 @@ func TestSweepRetransmit(t *testing.T) {
 // once they reach maxRetries.
 func TestSweepRetransmitMaxRetries(t *testing.T) {
 	table := NewConnectionTable()
-	table.AddSynSent(1, 10, 50000, 53, 100)
+	srcIP := u32ToIPAddr(1)
+	dstIP := u32ToIPAddr(10)
+	table.AddSynSent(srcIP, dstIP, 50000, 53, 100)
 
 	// Sweep 3 times with maxRetries=2
 	for i := 0; i < 3; i++ {
 		table.SweepRetransmit(50000, 60999, 2, func(st *State) {})
 	}
 
-	st, _ := table.Get(1, 10, 50000, 53)
+	st, _ := table.Get(srcIP, dstIP, 50000, 53)
 	if st.NegRound != 2 {
 		t.Errorf("NegRound should cap at maxRetries=2, got %d", st.NegRound)
 	}

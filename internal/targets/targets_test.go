@@ -24,7 +24,7 @@ func TestCIDRIterator(t *testing.T) {
 		if !ok {
 			t.Fatal("Iterator exhausted prematurely")
 		}
-		if ipStr := Uint32ToIP(ip).String(); ipStr != exp {
+		if ipStr := ip.String(); ipStr != exp {
 			t.Errorf("Expected %s, got %s", exp, ipStr)
 		}
 	}
@@ -55,7 +55,7 @@ func TestRangeIterator(t *testing.T) {
 		if !ok {
 			t.Fatal("Iterator exhausted prematurely")
 		}
-		if ipStr := Uint32ToIP(ip).String(); ipStr != exp {
+		if ipStr := ip.String(); ipStr != exp {
 			t.Errorf("Expected %s, got %s", exp, ipStr)
 		}
 	}
@@ -109,8 +109,9 @@ func TestExclusion(t *testing.T) {
 		if !ok {
 			break
 		}
-		if ip >= startEx && ip <= endEx {
-			t.Errorf("Excluded IP found: %s", Uint32ToIP(ip))
+		ipU32 := IPAddrToUint32(ip)
+		if ipU32 >= startEx && ipU32 <= endEx {
+			t.Errorf("Excluded IP found: %s", ip.String())
 		}
 		count++
 	}

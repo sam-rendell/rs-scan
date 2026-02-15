@@ -12,11 +12,14 @@ func TestTXRingBasic(t *testing.T) {
 		t.Fatalf("expected empty ring, got len %d", r.Len())
 	}
 
-	ok := r.Enqueue(TXRequest{DstIP: 1, Flags: FlagACK})
+	ip1 := u32ToStackIPAddr(1)
+	ip2 := u32ToStackIPAddr(2)
+
+	ok := r.Enqueue(TXRequest{DstIP: ip1, Flags: FlagACK})
 	if !ok {
 		t.Fatal("enqueue failed on empty ring")
 	}
-	ok = r.Enqueue(TXRequest{DstIP: 2, Flags: FlagRST})
+	ok = r.Enqueue(TXRequest{DstIP: ip2, Flags: FlagRST})
 	if !ok {
 		t.Fatal("enqueue failed")
 	}
@@ -29,7 +32,7 @@ func TestTXRingBasic(t *testing.T) {
 	if !ok {
 		t.Fatal("dequeue failed")
 	}
-	if req.DstIP != 1 || req.Flags != FlagACK {
+	if req.DstIP != ip1 || req.Flags != FlagACK {
 		t.Fatalf("unexpected request: %+v", req)
 	}
 
@@ -37,8 +40,8 @@ func TestTXRingBasic(t *testing.T) {
 	if !ok {
 		t.Fatal("dequeue failed")
 	}
-	if req.DstIP != 2 {
-		t.Fatalf("unexpected DstIP: %d", req.DstIP)
+	if req.DstIP != ip2 {
+		t.Fatalf("unexpected DstIP: %v", req.DstIP)
 	}
 
 	_, ok = r.Dequeue()
@@ -52,21 +55,22 @@ func TestTXRingFull(t *testing.T) {
 
 	// Fill the ring
 	for i := 0; i < 1024; i++ {
-		ok := r.Enqueue(TXRequest{DstIP: uint32(i)})
+		ok := r.Enqueue(TXRequest{DstIP: u32ToStackIPAddr(uint32(i))})
 		if !ok {
 			t.Fatalf("enqueue failed at %d", i)
 		}
 	}
 
 	// Should be full
-	ok := r.Enqueue(TXRequest{DstIP: 9999})
+	ip9999 := u32ToStackIPAddr(9999)
+	ok := r.Enqueue(TXRequest{DstIP: ip9999})
 	if ok {
 		t.Fatal("expected enqueue to fail when ring is full")
 	}
 
 	// Drain one, then enqueue should work
 	r.Dequeue()
-	ok = r.Enqueue(TXRequest{DstIP: 9999})
+	ok = r.Enqueue(TXRequest{DstIP: ip9999})
 	if !ok {
 		t.Fatal("enqueue should succeed after dequeue")
 	}
@@ -76,7 +80,7 @@ func TestTXRingDrainBatch(t *testing.T) {
 	r := NewTXRing(1024)
 
 	for i := 0; i < 10; i++ {
-		r.Enqueue(TXRequest{DstIP: uint32(i)})
+		r.Enqueue(TXRequest{DstIP: u32ToStackIPAddr(uint32(i))})
 	}
 
 	dst := make([]TXRequest, 256)
@@ -85,8 +89,9 @@ func TestTXRingDrainBatch(t *testing.T) {
 		t.Fatalf("expected 10 drained, got %d", n)
 	}
 	for i := 0; i < 10; i++ {
-		if dst[i].DstIP != uint32(i) {
-			t.Fatalf("dst[%d].DstIP = %d, want %d", i, dst[i].DstIP, i)
+		expectedIP := u32ToStackIPAddr(uint32(i))
+		if dst[i].DstIP != expectedIP {
+			t.Fatalf("dst[%d].DstIP = %v, want %v", i, dst[i].DstIP, expectedIP)
 		}
 	}
 
@@ -109,7 +114,7 @@ func TestTXRingMPSC(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			for i := 0; i < perGoroutine; i++ {
-				for !r.Enqueue(TXRequest{DstIP: uint32(id*perGoroutine + i)}) {
+				for !r.Enqueue(TXRequest{DstIP: u32ToStackIPAddr(uint32(id*perGoroutine + i))}) {
 					// Ring full — spin (consumer will drain)
 				}
 			}

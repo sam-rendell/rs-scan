@@ -15,7 +15,7 @@ func NewFilteredIterator(source Iterator, exclusion *IntervalTree) *FilteredIter
 }
 
 // Seek advances the iterator to the specified IP.
-func (it *FilteredIterator) Seek(ip uint32) {
+func (it *FilteredIterator) Seek(ip IPAddr) {
 	it.source.Seek(ip)
 }
 
@@ -23,25 +23,23 @@ func (it *FilteredIterator) GetState() uint64 {
 	return it.source.GetState()
 }
 
-func (it *FilteredIterator) SetState(val uint64) {
-	it.source.SetState(val)
-}
-
 // Next returns the next valid IP, skipping excluded ranges.
-func (it *FilteredIterator) Next() (uint32, bool) {
+func (it *FilteredIterator) Next() (IPAddr, bool) {
 	for {
 		ip, ok := it.source.Next()
 		if !ok {
-			return 0, false
+			return IPAddr{}, false
 		}
 
-		blocked, endOfBlock := it.exclusion.Contains(ip)
+		// IntervalTree still uses uint32 (Phase 1 compat shim)
+		ipU32 := IPAddrToUint32(ip)
+		blocked, endOfBlock := it.exclusion.Contains(ipU32)
 		if !blocked {
 			return ip, true
 		}
 
 		// If blocked, skip to the end of the block + 1.
-		it.source.Seek(endOfBlock + 1)
+		it.source.Seek(IPToIPAddr(endOfBlock + 1))
 	}
 }
 

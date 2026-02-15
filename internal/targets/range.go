@@ -65,10 +65,10 @@ func parseOctetRange(s string) ([]int, error) {
 	return []int{val}, nil
 }
 
-func (it *RangeIterator) Next() (uint32, bool) {
+func (it *RangeIterator) Next() (IPAddr, bool) {
 	// If the range is empty (shouldn't happen with valid constructor)
 	if len(it.octets[0]) == 0 {
-		return 0, false
+		return IPAddr{}, false
 	}
 
 	// Handle first call
@@ -78,9 +78,6 @@ func (it *RangeIterator) Next() (uint32, bool) {
 	}
 
 	// Increment logic (Working backwards from 4th octet)
-	// indices[3]++
-	// if indices[3] >= len(octets[3]) { indices[3]=0; indices[2]++ ... }
-	
 	for i := 3; i >= 0; i-- {
 		it.indices[i]++
 		if it.indices[i] < len(it.octets[i]) {
@@ -92,36 +89,29 @@ func (it *RangeIterator) Next() (uint32, bool) {
 	}
 
 	// If we exit the loop, we overflowed the first octet, meaning we are done.
-	return 0, false
+	return IPAddr{}, false
 }
 
-func (it *RangeIterator) currentIP() uint32 {
-	ip := (uint32(it.octets[0][it.indices[0]]) << 24) |
-		(uint32(it.octets[1][it.indices[1]]) << 16) |
-		(uint32(it.octets[2][it.indices[2]]) << 8) |
-		(uint32(it.octets[3][it.indices[3]]))
-	return ip
+func (it *RangeIterator) currentIP() IPAddr {
+	return IPAddrFrom4(
+		byte(it.octets[0][it.indices[0]]),
+		byte(it.octets[1][it.indices[1]]),
+		byte(it.octets[2][it.indices[2]]),
+		byte(it.octets[3][it.indices[3]]),
+	)
 }
 
 // Seek for RangeIterator is currently a no-op or naive forward.
-// Proper implementation requires reverse-mapping uint32 to the indices.
-// For now, to satisfy the interface and since exclusions on complex ranges are rare/small:
-func (it *RangeIterator) Seek(target uint32) {
-	// Optimization: If target is very far ahead, this is slow.
-	// But calculating indices for 1.1-5.1-5 from a flat IP is complex logic.
-	// We leave this as a TODO for optimization.
+func (it *RangeIterator) Seek(target IPAddr) {
+	tU32 := IPAddrToUint32(target)
 	for {
-		// Peek current
 		if !it.started {
-			// Initialize indices implicitly
 			it.started = true
 		} else {
-			// We need to check if we are behind target
-			curr := it.currentIP()
-			if curr >= target {
+			curr := IPAddrToUint32(it.currentIP())
+			if curr >= tU32 {
 				return
 			}
-			// Advance
 			_, ok := it.Next()
 			if !ok {
 				return
@@ -131,17 +121,11 @@ func (it *RangeIterator) Seek(target uint32) {
 }
 
 func (it *RangeIterator) GetState() uint64 {
-	// Not easily serializable to a single int without custom encoding
 	return 0
-}
-
-func (it *RangeIterator) SetState(val uint64) {
-	// Not supported
 }
 
 // Split for RangeIterator is complex due to the disjoint nature.
 // For now, we return the iterator itself as a single shard.
-// TODO: Implement deep splitting for RangeIterator.
 func (it *RangeIterator) Split(n int) []Iterator {
 	return []Iterator{it}
 }

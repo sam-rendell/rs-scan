@@ -10,7 +10,7 @@ func BenchmarkGenerateCookie(b *testing.B) {
 	s := &RingSender{cookieSecret: 0xDEADBEEFCAFEBABE}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		s.GenerateCookie(uint32(i), 80)
+		s.GenerateCookie(u32ToIP16(uint32(i)), 80)
 	}
 }
 
@@ -62,18 +62,19 @@ func BenchmarkBuildSYNPacket(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		pkt := &s.synPkt
-		dstIP := uint32(0x0A000000 + i)
+		dstIPu32 := uint32(0x0A000000 + i) // keep for packet patching
+		dstIP16 := u32ToIP16(dstIPu32)     // for GenerateCookie
 		dstPort := uint16(80)
 		srcPort := uint16(32768 + i%28232)
 
 		s.ipID++
 		binary.BigEndian.PutUint16(pkt[offIPId:], s.ipID)
-		binary.BigEndian.PutUint32(pkt[offIPDstIP:], dstIP)
+		binary.BigEndian.PutUint32(pkt[offIPDstIP:], dstIPu32) // patch template with uint32
 		binary.BigEndian.PutUint16(pkt[offIPChecksum:], 0)
 		binary.BigEndian.PutUint16(pkt[offIPChecksum:], ipChecksum(pkt[ipOff:ipOff+ipLen]))
 		binary.BigEndian.PutUint16(pkt[offTCPSrcPort:], srcPort)
 		binary.BigEndian.PutUint16(pkt[offTCPDstPort:], dstPort)
-		binary.BigEndian.PutUint32(pkt[offTCPSeq:], s.GenerateCookie(dstIP, dstPort))
+		binary.BigEndian.PutUint32(pkt[offTCPSeq:], s.GenerateCookie(dstIP16, dstPort))
 		binary.BigEndian.PutUint16(pkt[offTCPChecksum:], 0)
 		binary.BigEndian.PutUint16(pkt[offTCPChecksum:],
 			tcpChecksum(pkt[offIPSrcIP:offIPSrcIP+4], pkt[offIPDstIP:offIPDstIP+4], pkt[tcpOff:synPktLen]))

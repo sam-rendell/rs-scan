@@ -408,8 +408,8 @@ func TestTreeView_StructureAndCounts(t *testing.T) {
 
 	// First subnet: 192.168.1.0/24
 	sn1 := m.subnets[0]
-	if sn1.Label != "192.168.1.0/24" {
-		t.Fatalf("expected 192.168.1.0/24, got %s", sn1.Label)
+	if sn1.Prefix != "192.168.1.0/24" {
+		t.Fatalf("expected 192.168.1.0/24, got %s", sn1.Prefix)
 	}
 	if len(sn1.Hosts) != 2 {
 		t.Fatalf("expected 2 hosts in first subnet, got %d", len(sn1.Hosts))
@@ -572,40 +572,47 @@ func TestPortHistogram_UniqueKeys(t *testing.T) {
 	}
 }
 
-// ── Heatmap tests ────────────────────────────────────────────────────
+// ── Service view tests ───────────────────────────────────────────────
 
-func TestHeatmap_Render(t *testing.T) {
+func TestServiceView_Render(t *testing.T) {
 	var running int32 = 1
-	m := NewModel("10.0.0.0/16", "80", "eth0", "TCP SYN", &running)
+	m := NewModel("10.0.0.0/16", "22,80", "eth0", "TCP SYN", &running)
 	m.width = 120
 	m.height = 40
-	m.heatmapMode = true
+	m.serviceMode = true
 
 	// Add some results
 	for i := 0; i < 5; i++ {
 		m.handleEvent(ScanEvent{Type: EvtOpen, IP: fmt.Sprintf("10.0.%d.1", i), Port: 80, Proto: "tcp"})
+		m.handleEvent(ScanEvent{Type: EvtOpen, IP: fmt.Sprintf("10.0.%d.1", i), Port: 22, Proto: "tcp"})
 	}
 	m.rebuildFiltered()
 
 	v := m.View()
-	if !strings.Contains(v, "Heatmap") {
-		t.Fatal("heatmap view should contain 'Heatmap' header")
+	if !strings.Contains(v, "HTTP") {
+		t.Fatal("service view should contain 'HTTP' category")
+	}
+	if !strings.Contains(v, "SSH") {
+		t.Fatal("service view should contain 'SSH' category")
 	}
 }
 
-// ── parseIPToUint32 test ─────────────────────────────────────────────
+// ── groupKey test ────────────────────────────────────────────────────
 
-func TestParseIPToUint32(t *testing.T) {
-	ip := parseIPToUint32("192.168.1.100")
-	// 192.168.1.100 = 0xC0A80164
-	expected := uint32(0xC0A80164)
-	if ip != expected {
-		t.Fatalf("expected 0x%X, got 0x%X", expected, ip)
+func TestGroupKey(t *testing.T) {
+	tests := []struct {
+		ip   string
+		want string
+	}{
+		{"192.168.1.100", "192.168.1.0/24"},
+		{"10.0.0.1", "10.0.0.0/24"},
+		{"2001:db8::1", "2001:db8::/48"},
+		{"2001:db8:abcd::1", "2001:db8:abcd::/48"},
 	}
-
-	// /24 prefix
-	prefix := ip & 0xFFFFFF00
-	if prefix != 0xC0A80100 {
-		t.Fatalf("expected prefix 0xC0A80100, got 0x%X", prefix)
+	for _, tt := range tests {
+		got := groupKey(tt.ip)
+		if got != tt.want {
+			t.Errorf("groupKey(%q) = %q, want %q", tt.ip, got, tt.want)
+		}
 	}
 }

@@ -46,10 +46,14 @@ func NowNano() int64 {
 	return atomic.LoadInt64(&sharedNow)
 }
 
+// IPAddr is a 16-byte fixed-size IP address (matches targets.IPAddr layout).
+// Duplicated here to avoid import cycle between stack and targets.
+type IPAddr [16]byte
+
 // State represents the status of a tracked connection.
 type State struct {
-	SrcIP   uint32
-	DstIP   uint32
+	SrcIP   IPAddr
+	DstIP   IPAddr
 	SrcPort uint16
 	DstPort uint16
 	Status  ConnectionStatus
@@ -116,23 +120,29 @@ func NewConnectionTable() *ConnectionTable {
 	return t
 }
 
-func hash4Tuple(srcIP, dstIP uint32, srcPort, dstPort uint16) uint64 {
-	// FNV-1a inspired multiply-xor cascade — no allocations, good avalanche.
+func hash4Tuple(srcIP, dstIP IPAddr, srcPort, dstPort uint16) uint64 {
+	// FNV-1a over 36 bytes (16+16+2+2) — no allocations, good avalanche.
 	const (
 		offset = uint64(14695981039346656037)
 		prime  = uint64(1099511628211)
 	)
 	h := offset
-	h ^= uint64(srcIP)
-	h *= prime
-	h ^= uint64(dstIP)
-	h *= prime
+	// Hash all 16 bytes of srcIP
+	for i := 0; i < 16; i += 2 {
+		h ^= uint64(srcIP[i])<<8 | uint64(srcIP[i+1])
+		h *= prime
+	}
+	// Hash all 16 bytes of dstIP
+	for i := 0; i < 16; i += 2 {
+		h ^= uint64(dstIP[i])<<8 | uint64(dstIP[i+1])
+		h *= prime
+	}
 	h ^= uint64(srcPort) | (uint64(dstPort) << 16)
 	h *= prime
 	return h
 }
 
-func (t *ConnectionTable) AddSynSent(srcIP, dstIP uint32, srcPort, dstPort uint16, seq uint32) {
+func (t *ConnectionTable) AddSynSent(srcIP, dstIP IPAddr, srcPort, dstPort uint16, seq uint32) {
 	key := hash4Tuple(srcIP, dstIP, srcPort, dstPort)
 	sh := t.shards[key%shardCount]
 
@@ -153,7 +163,7 @@ func (t *ConnectionTable) AddSynSent(srcIP, dstIP uint32, srcPort, dstPort uint1
 	sh.Unlock()
 }
 
-func (t *ConnectionTable) Get(srcIP, dstIP uint32, srcPort, dstPort uint16) (*State, bool) {
+func (t *ConnectionTable) Get(srcIP, dstIP IPAddr, srcPort, dstPort uint16) (*State, bool) {
 	key := hash4Tuple(srcIP, dstIP, srcPort, dstPort)
 	shard := t.shards[key%shardCount]
 
@@ -163,7 +173,7 @@ func (t *ConnectionTable) Get(srcIP, dstIP uint32, srcPort, dstPort uint16) (*St
 	return val, ok
 }
 
-func (t *ConnectionTable) UpdateState(srcIP, dstIP uint32, srcPort, dstPort uint16, status ConnectionStatus, seq, ack uint32, data []byte) {
+func (t *ConnectionTable) UpdateState(srcIP, dstIP IPAddr, srcPort, dstPort uint16, status ConnectionStatus, seq, ack uint32, data []byte) {
 	key := hash4Tuple(srcIP, dstIP, srcPort, dstPort)
 	shard := t.shards[key%shardCount]
 

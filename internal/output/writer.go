@@ -2,6 +2,7 @@ package output
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"sync"
 )
@@ -71,6 +72,31 @@ func (w *FormattedWriter) Close() error {
 	return w.file.Close()
 }
 
+// ClosingWriter wraps a Formatter with a mutex and an io.Closer (typically a file).
+type ClosingWriter struct {
+	fmt    Formatter
+	closer io.Closer
+	mu     sync.Mutex
+}
+
+// NewClosingWriter creates a ResultWriter that closes the underlying resource on Close.
+func NewClosingWriter(f Formatter, c io.Closer) *ClosingWriter {
+	return &ClosingWriter{fmt: f, closer: c}
+}
+
+func (w *ClosingWriter) Write(res *Result) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.fmt.Write(res)
+}
+
+func (w *ClosingWriter) Close() error {
+	w.mu.Lock()
+	w.fmt.Flush()
+	w.mu.Unlock()
+	return w.closer.Close()
+}
+
 // OutputSink fans out results to multiple writers.
 type OutputSink struct {
 	writers []ResultWriter
@@ -96,4 +122,17 @@ func (s *OutputSink) Write(res *Result) error {
 		}
 	}
 	return nil
+}
+
+// Close closes all writers that implement io.Closer.
+func (s *OutputSink) Close() error {
+	var firstErr error
+	for _, w := range s.writers {
+		if c, ok := w.(io.Closer); ok {
+			if err := c.Close(); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
 }

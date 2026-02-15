@@ -42,11 +42,13 @@ func BenchmarkTupleIteratorNext(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, ok := iter.Next()
+		ip, port, ok := iter.Next()
 		if !ok {
 			// Reset iterator for continuous benchmarking
 			iter.current = 0
 		}
+		_ = ip
+		_ = port
 	}
 }
 
@@ -61,10 +63,12 @@ func BenchmarkTupleIteratorNext_MultiRange(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, ok := iter.Next()
+		ip, port, ok := iter.Next()
 		if !ok {
 			iter.current = 0
 		}
+		_ = ip
+		_ = port
 	}
 }
 
@@ -79,10 +83,12 @@ func BenchmarkTupleIteratorNext_WithExclusion(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, ok := iter.Next()
+		ip, port, ok := iter.Next()
 		if !ok {
 			iter.current = 0
 		}
+		_ = ip
+		_ = port
 	}
 }
 

@@ -23,7 +23,7 @@ func newTestEngine(t *testing.T) (*Engine, *Arena, *TXRing, chan GrabResult) {
 	running := int32(1)
 	engine := NewEngine(EngineConfig{
 		Arena: arena, TXRing: txRing, Probes: pt, ConnTable: connTable,
-		SrcIP: 0xC0A80001, Output: output, Phase1MS: 500,
+		SrcIP: u32ToStackIPAddr(0xC0A80001), Output: output, Phase1MS: 500,
 		ConnTimeout: 5 * time.Second, Running: &running,
 	})
 	return engine, arena, txRing, output
@@ -39,7 +39,7 @@ func TestHandleSynAck_UpdatesTimestamp(t *testing.T) {
 	// Simulate a state created 4 seconds ago (near timeout)
 	oldTime := stack.NowNano() - 4*int64(time.Second)
 	state := &stack.State{
-		SrcIP: 0xC0A80001, DstIP: 0x0A000001,
+		SrcIP: u32ToStackIPAddr(0xC0A80001), DstIP: u32ToStackIPAddr(0x0A000001),
 		SrcPort: 40000, DstPort: 22,
 		Status:  stack.StatusSynSent,
 		Seq:     1000, Ack: 2001,
@@ -68,7 +68,7 @@ func TestHandleSynAck_EnqueuesACK(t *testing.T) {
 	engine, _, txRing, _ := newTestEngine(t)
 
 	state := &stack.State{
-		SrcIP: 0xC0A80001, DstIP: 0x0A000001,
+		SrcIP: u32ToStackIPAddr(0xC0A80001), DstIP: u32ToStackIPAddr(0x0A000001),
 		SrcPort: 40000, DstPort: 22,
 		Status: stack.StatusSynSent, Seq: 100, Ack: 200,
 		Updated: stack.NowNano(),
@@ -83,8 +83,9 @@ func TestHandleSynAck_EnqueuesACK(t *testing.T) {
 	if req.Flags != FlagACK {
 		t.Fatalf("expected ACK flag (0x%02x), got 0x%02x", FlagACK, req.Flags)
 	}
-	if req.DstIP != 0x0A000001 {
-		t.Fatalf("wrong DstIP in ACK: %08x", req.DstIP)
+	expectedDstIP := u32ToStackIPAddr(0x0A000001)
+	if req.DstIP != expectedDstIP {
+		t.Fatalf("wrong DstIP in ACK: %v", req.DstIP)
 	}
 }
 
@@ -93,7 +94,7 @@ func TestHandleSynAck_AllocatesArena(t *testing.T) {
 	engine, _, _, _ := newTestEngine(t)
 
 	state := &stack.State{
-		SrcIP: 0xC0A80001, DstIP: 0x0A000001,
+		SrcIP: u32ToStackIPAddr(0xC0A80001), DstIP: u32ToStackIPAddr(0x0A000001),
 		SrcPort: 40000, DstPort: 22,
 		Status: stack.StatusSynSent, Seq: 100, Ack: 200,
 		Updated: stack.NowNano(), ArenaSlot: stack.NoArenaSlot,
@@ -117,7 +118,7 @@ func TestHandleData_AppendsAndACKs(t *testing.T) {
 
 	slotID, _, _ := arena.Alloc()
 	state := &stack.State{
-		SrcIP: 0xC0A80001, DstIP: 0x0A000001,
+		SrcIP: u32ToStackIPAddr(0xC0A80001), DstIP: u32ToStackIPAddr(0x0A000001),
 		SrcPort: 40000, DstPort: 22,
 		Status: stack.StatusEstablished,
 		Seq: 100, Ack: 200,
@@ -153,7 +154,7 @@ func TestFullPipeline_SynAckToFinalize(t *testing.T) {
 	engine, _, txRing, output := newTestEngine(t)
 
 	state := &stack.State{
-		SrcIP: 0xC0A80001, DstIP: 0x0A000001,
+		SrcIP: u32ToStackIPAddr(0xC0A80001), DstIP: u32ToStackIPAddr(0x0A000001),
 		SrcPort: 40000, DstPort: 22,
 		Status: stack.StatusSynSent,
 		Seq: 100, Ack: 200,
@@ -195,8 +196,9 @@ func TestFullPipeline_SynAckToFinalize(t *testing.T) {
 	// GrabResult should be in output channel
 	select {
 	case result := <-output:
-		if result.IP != 0x0A000001 {
-			t.Fatalf("wrong IP: %08x", result.IP)
+		expectedIP := u32ToStackIPAddr(0x0A000001)
+		if result.IP != expectedIP {
+			t.Fatalf("wrong IP: %v", result.IP)
 		}
 		if result.Port != 22 {
 			t.Fatalf("wrong port: %d", result.Port)
@@ -226,7 +228,7 @@ func TestHandleRst_NoRSTBack(t *testing.T) {
 
 	slotID, _, _ := arena.Alloc()
 	state := &stack.State{
-		SrcIP: 0xC0A80001, DstIP: 0x0A000001,
+		SrcIP: u32ToStackIPAddr(0xC0A80001), DstIP: u32ToStackIPAddr(0x0A000001),
 		SrcPort: 40000, DstPort: 22,
 		Status: stack.StatusEstablished,
 		ArenaSlot: slotID, RecvLen: 0,
@@ -259,7 +261,7 @@ func TestCheckTimers_SendsRST(t *testing.T) {
 
 	slotID, _, _ := arena.Alloc()
 	state := &stack.State{
-		SrcIP: 0xC0A80001, DstIP: 0x0A000001,
+		SrcIP: u32ToStackIPAddr(0xC0A80001), DstIP: u32ToStackIPAddr(0x0A000001),
 		SrcPort: 40000, DstPort: 22,
 		Status: stack.StatusEstablished,
 		ArenaSlot: slotID, RecvLen: 0,

@@ -10,7 +10,7 @@ import (
 
 // GrabResult is sent to the output channel when a banner grab completes.
 type GrabResult struct {
-	IP     uint32
+	IP     stack.IPAddr
 	Port   uint16
 	TTL    uint8
 	Probe  string
@@ -24,7 +24,7 @@ type Engine struct {
 	txRing     *TXRing
 	probes     *ProbeTable
 	connTable  *stack.ConnectionTable
-	srcIP      uint32
+	srcIP      stack.IPAddr
 	output     chan<- GrabResult
 	phase1MS   int64 // default phase1 timeout in nanoseconds
 	connTimeNS int64 // default connection timeout in nanoseconds
@@ -37,7 +37,7 @@ type EngineConfig struct {
 	TXRing       *TXRing
 	Probes       *ProbeTable
 	ConnTable    *stack.ConnectionTable
-	SrcIP        uint32
+	SrcIP        stack.IPAddr
 	Output       chan<- GrabResult
 	Phase1MS     int // milliseconds to wait before sending hello
 	ConnTimeout  time.Duration

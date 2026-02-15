@@ -1,24 +1,21 @@
 package netinfo
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"net"
-	"os"
-	"os/exec"
-	"strings"
 	"time"
 )
 
 // NetworkDetails holds the discovered configuration.
 type NetworkDetails struct {
-	SrcIP      net.IP
-	SrcMAC     net.HardwareAddr
-	GatewayIP  net.IP
-	GatewayMAC net.HardwareAddr
+	SrcIP        net.IP
+	SrcMAC       net.HardwareAddr
+	GatewayIP    net.IP
+	GatewayMAC   net.HardwareAddr
+	SrcIPv6      net.IP
+	GatewayIPv6  net.IP
+	GatewayMACv6 net.HardwareAddr
+	IsTUN        bool
 }
 
 // GetDetails discovers network info for the given interface.
@@ -28,25 +25,62 @@ func GetDetails(ifaceName string) (*NetworkDetails, error) {
 		return nil, fmt.Errorf("interface not found: %w", err)
 	}
 
-	// 1. Get Source MAC
+	// 1. Get Source MAC (empty for TUN/point-to-point interfaces)
 	srcMAC := iface.HardwareAddr
 
-	// 2. Get Source IP
+	// 2. Get Source IP (IPv4 and IPv6)
 	addrs, err := iface.Addrs()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get addrs: %w", err)
 	}
 	var srcIP net.IP
+	var srcIPv6 net.IP
 	for _, addr := range addrs {
-		if ipNet, ok := addr.(*net.IPNet); ok && !ipNet.IP.IsLoopback() {
+		if ipNet, ok := addr.(*net.IPNet); ok {
 			if ipNet.IP.To4() != nil {
-				srcIP = ipNet.IP.To4()
-				break
+				if srcIP == nil {
+					srcIP = ipNet.IP.To4()
+				}
+			} else if ipNet.IP.To16() != nil && !ipNet.IP.IsLinkLocalUnicast() {
+				// Skip link-local (fe80::/10), only use global-scope IPv6
+				if srcIPv6 == nil {
+					srcIPv6 = ipNet.IP
+				}
 			}
 		}
 	}
+	if srcIP == nil && srcIPv6 == nil {
+		return nil, fmt.Errorf("no IP address found on %s", ifaceName)
+	}
+
+	// Loopback or TUN/point-to-point: no gateway discovery needed
+	if len(srcMAC) == 0 || (srcIP != nil && srcIP.IsLoopback()) {
+		return &NetworkDetails{
+			SrcIP:   srcIP,
+			SrcIPv6: srcIPv6,
+			IsTUN:   true,
+		}, nil
+	}
+
+	// IPv6-only interface with MAC (rare but possible): skip IPv4 gateway
 	if srcIP == nil {
-		return nil, fmt.Errorf("no IPv4 address found on %s", ifaceName)
+		var gwIPv6 net.IP
+		var gwMACv6 net.HardwareAddr
+		gwIPv6, err = getGatewayIPv6(ifaceName)
+		if err == nil && gwIPv6 != nil {
+			gwMACv6, err = getNDPEntry(gwIPv6.String())
+			if err != nil {
+				pingGateway6(gwIPv6.String())
+				time.Sleep(100 * time.Millisecond)
+				gwMACv6, _ = getNDPEntry(gwIPv6.String())
+			}
+		}
+		return &NetworkDetails{
+			SrcMAC:       srcMAC,
+			SrcIPv6:      srcIPv6,
+			GatewayIPv6:  gwIPv6,
+			GatewayMACv6: gwMACv6,
+		}, nil
 	}
 
 	// 3. Get Gateway IP
@@ -59,10 +93,9 @@ func GetDetails(ifaceName string) (*NetworkDetails, error) {
 	gwMAC, err := getARPEntry(gwIP.String())
 	if err != nil {
 		// Try to populate ARP cache by pinging gateway once
-		// We ignore the ping error itself, as we just want the ARP side effect.
-		exec.Command("ping", "-c", "1", "-W", "1", gwIP.String()).Run()
+		pingGateway(gwIP.String())
 		time.Sleep(100 * time.Millisecond) // Give kernel a moment
-		
+
 		// Retry lookup
 		gwMAC, err = getARPEntry(gwIP.String())
 		if err != nil {
@@ -70,83 +103,32 @@ func GetDetails(ifaceName string) (*NetworkDetails, error) {
 		}
 	}
 
-	return &NetworkDetails{
-		SrcIP:      srcIP,
-		SrcMAC:     srcMAC,
-		GatewayIP:  gwIP,
-		GatewayMAC: gwMAC,
-	}, nil
-}
-
-// getGatewayIP parses /proc/net/route
-func getGatewayIP(iface string) (net.IP, error) {
-	data, err := os.ReadFile("/proc/net/route")
-	if err != nil {
-		return nil, err
-	}
-
-	scanner := bufio.NewScanner(bytes.NewReader(data))
-	for scanner.Scan() {
-		fields := strings.Fields(scanner.Text())
-		if len(fields) < 3 {
-			continue
-		}
-		// Field 0: Iface, Field 1: Dest, Field 2: Gateway
-		if fields[0] == iface && fields[1] == "00000000" {
-			// Gateway is in hex little-endian (e.g., 0101A8C0 -> 192.168.1.1)
-			gwHex, err := hex.DecodeString(fields[2])
-			if err != nil || len(gwHex) != 4 {
-				continue
-			}
-			// Reverse bytes for correct IP
-			return net.IPv4(gwHex[3], gwHex[2], gwHex[1], gwHex[0]), nil
-		}
-	}
-	return nil, fmt.Errorf("no default route found")
-}
-
-// getARPEntry parses /proc/net/arp
-func getARPEntry(ip string) (net.HardwareAddr, error) {
-	data, err := os.ReadFile("/proc/net/arp")
-	if err != nil {
-		return nil, err
-	}
-
-	scanner := bufio.NewScanner(bytes.NewReader(data))
-	scanner.Scan() // Skip header
-	for scanner.Scan() {
-		fields := strings.Fields(scanner.Text())
-		if len(fields) < 4 {
-			continue
-		}
-		// Field 0: IP, Field 3: MAC
-		if fields[0] == ip {
-			mac, err := net.ParseMAC(fields[3])
+	// 5. IPv6 Gateway Discovery (optional, non-fatal)
+	var gwIPv6 net.IP
+	var gwMACv6 net.HardwareAddr
+	if srcIPv6 != nil {
+		gwIPv6, err = getGatewayIPv6(ifaceName)
+		if err == nil && gwIPv6 != nil {
+			// Try to get gateway MAC via NDP
+			gwMACv6, err = getNDPEntry(gwIPv6.String())
 			if err != nil {
-				return nil, err
+				// Try to populate NDP cache by pinging
+				pingGateway6(gwIPv6.String())
+				time.Sleep(100 * time.Millisecond)
+				gwMACv6, _ = getNDPEntry(gwIPv6.String())
+				// Ignore error - IPv6 gateway MAC is optional
 			}
-			return mac, nil
 		}
+		// Ignore IPv6 gateway discovery errors - it's optional
 	}
-	return nil, fmt.Errorf("ARP entry not found for %s", ip)
-}
 
-func parseHexIP(s string) (net.IP, error) {
-	d, err := hex.DecodeString(s)
-	if err != nil {
-		return nil, err
-	}
-	if len(d) != 4 {
-		return nil, fmt.Errorf("invalid IP length")
-	}
-	// Little endian to Big endian
-	return net.IP{d[3], d[2], d[1], d[0]}, nil
-}
-
-// Unused but kept for reference
-func ipToUint32(ip net.IP) uint32 {
-	if len(ip) == 16 {
-		return binary.BigEndian.Uint32(ip[12:16])
-	}
-	return binary.BigEndian.Uint32(ip)
+	return &NetworkDetails{
+		SrcIP:        srcIP,
+		SrcMAC:       srcMAC,
+		GatewayIP:    gwIP,
+		GatewayMAC:   gwMAC,
+		SrcIPv6:      srcIPv6,
+		GatewayIPv6:  gwIPv6,
+		GatewayMACv6: gwMACv6,
+	}, nil
 }

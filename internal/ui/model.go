@@ -1,9 +1,11 @@
 package ui
 
 import (
-	"encoding/binary"
+	"bytes"
 	"fmt"
+	"io"
 	"net"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -72,12 +74,16 @@ type Model struct {
 	// Tree view
 	treeMode   bool
 	subnets    []*subnetNode
-	subnetMap  map[uint32]*subnetNode
+	subnetMap  map[string]*subnetNode
 	treeCursor int
 	treeOffset int
 
-	// Heatmap view
-	heatmapMode bool
+	// Service portfolio view
+	serviceMode bool
+	services    []*serviceNode
+	serviceMap  map[string]*serviceNode
+	svcCursor   int
+	svcOffset   int
 
 	// View state
 	cursor     int  // index into filtered view
@@ -114,7 +120,6 @@ type portEntry struct {
 }
 
 type hostNode struct {
-	IP       uint32
 	IPStr    string
 	Ports    []*portEntry
 	Expanded bool
@@ -123,12 +128,31 @@ type hostNode struct {
 }
 
 type subnetNode struct {
-	Prefix   uint32 // /24 network address (IP & 0xFFFFFF00)
-	Label    string // "192.168.1.0/24"
+	Prefix   string // "192.168.1.0/24" or "2001:db8::/48"
 	Hosts    []*hostNode
-	HostMap  map[uint32]*hostNode
+	HostMap  map[string]*hostNode // keyed by IP string
 	Expanded bool
 	Count    int // total port count
+}
+
+// ── Service view types ───────────────────────────────────────────────
+
+type serviceNode struct {
+	Name     string
+	Ports    []*portSummary
+	PortMap  map[string]*portSummary // key: "port/proto"
+	Total    int
+	Expanded bool
+}
+
+type portSummary struct {
+	Port     uint16
+	Proto    string
+	Count    int
+	Servers  map[string]int  // "nginx" → 412
+	Hosts    []string        // sample IPs (capped at 100)
+	hostSet  map[string]bool // dedup
+	Expanded bool
 }
 
 func NewModel(target, portSpec, iface, scanMode string, running *int32) Model {
@@ -141,7 +165,8 @@ func NewModel(target, portSpec, iface, scanMode string, running *int32) Model {
 		rows:       make(map[string]*resultRow, 1024),
 		order:      make([]string, 0, 1024),
 		portCounts: make(map[uint16]uint64, 64),
-		subnetMap:  make(map[uint32]*subnetNode, 64),
+		subnetMap:  make(map[string]*subnetNode, 64),
+		serviceMap: make(map[string]*serviceNode, 16),
 		follow:     true,
 		filterMode: FilterAll,
 	}
@@ -190,13 +215,15 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "t":
 		m.treeMode = !m.treeMode
-		m.heatmapMode = false
+		m.serviceMode = false
 		m.treeCursor = 0
 		m.treeOffset = 0
 		return m, nil
-	case "h":
-		m.heatmapMode = !m.heatmapMode
+	case "s":
+		m.serviceMode = !m.serviceMode
 		m.treeMode = false
+		m.svcCursor = 0
+		m.svcOffset = 0
 		return m, nil
 	case "/":
 		m.searching = true
@@ -227,6 +254,11 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Tree-mode navigation
 	if m.treeMode {
 		return m.updateTree(msg)
+	}
+
+	// Service-mode navigation
+	if m.serviceMode {
+		return m.updateService(msg)
 	}
 
 	// Flat-mode navigation
@@ -377,6 +409,7 @@ func (m *Model) handleEvent(ev ScanEvent) {
 			m.rows[key] = row
 			m.order = append(m.order, key)
 			m.updateTreeData(ev.IP, ev.Port, ev.Proto, ev.TTL, "", "", "open", ev.OSFamily, ev.OSConfidence)
+			m.updateServiceData(ev.IP, ev.Port, ev.Proto, "")
 			m.evictOld()
 		}
 
@@ -394,6 +427,7 @@ func (m *Model) handleEvent(ev ScanEvent) {
 				m.totalBanner++
 			}
 			m.updateTreeData(ev.IP, ev.Port, ev.Proto, ev.TTL, ev.Probe, ev.Banner, "banner", ev.OSFamily, ev.OSConfidence)
+			m.updateServiceData(ev.IP, ev.Port, ev.Proto, ev.Probe)
 		} else {
 			m.totalAll++
 			m.totalOpen++
@@ -415,6 +449,7 @@ func (m *Model) handleEvent(ev ScanEvent) {
 			m.rows[key] = row
 			m.order = append(m.order, key)
 			m.updateTreeData(ev.IP, ev.Port, ev.Proto, ev.TTL, ev.Probe, ev.Banner, "banner", ev.OSFamily, ev.OSConfidence)
+			m.updateServiceData(ev.IP, ev.Port, ev.Proto, ev.Probe)
 			m.evictOld()
 		}
 
@@ -495,53 +530,65 @@ func confRank(conf string) int {
 	}
 }
 
-func parseIPToUint32(ipStr string) uint32 {
+// groupKey returns a subnet grouping prefix for display in the tree view.
+// IPv4: /24 grouping. IPv6: /48 grouping.
+func groupKey(ipStr string) string {
 	ip := net.ParseIP(ipStr)
 	if ip == nil {
-		return 0
+		return ipStr + "/32"
 	}
-	ip = ip.To4()
-	if ip == nil {
-		return 0
+	if ip4 := ip.To4(); ip4 != nil {
+		masked := net.IPv4(ip4[0], ip4[1], ip4[2], 0).To4()
+		return fmt.Sprintf("%d.%d.%d.0/24", masked[0], masked[1], masked[2])
 	}
-	return binary.BigEndian.Uint32(ip)
+	// IPv6: mask to /48 (first 6 bytes)
+	ip16 := ip.To16()
+	var masked net.IP = make(net.IP, 16)
+	copy(masked[:6], ip16[:6])
+	return masked.String() + "/48"
 }
 
-func uint32ToIPStr(n uint32) string {
-	return fmt.Sprintf("%d.%d.%d.%d", n>>24, (n>>16)&0xFF, (n>>8)&0xFF, n&0xFF)
+// ipStrLess compares two IP address strings in proper numeric order.
+func ipStrLess(a, b string) bool {
+	ipA := net.ParseIP(a)
+	ipB := net.ParseIP(b)
+	if ipA == nil || ipB == nil {
+		return a < b
+	}
+	return bytes.Compare(ipA.To16(), ipB.To16()) < 0
 }
 
 func (m *Model) updateTreeData(ipStr string, port uint16, proto string, ttl uint8, service, bannerStr, state, osFamily, osConf string) {
-	ipU32 := parseIPToUint32(ipStr)
-	if ipU32 == 0 {
-		return
-	}
-	prefix := ipU32 & 0xFFFFFF00
+	prefix := groupKey(ipStr)
 
 	sn, ok := m.subnetMap[prefix]
 	if !ok {
 		sn = &subnetNode{
 			Prefix:  prefix,
-			Label:   fmt.Sprintf("%s/24", uint32ToIPStr(prefix)),
-			HostMap: make(map[uint32]*hostNode, 16),
+			HostMap: make(map[string]*hostNode, 16),
 		}
 		m.subnetMap[prefix] = sn
-		// Insert sorted by prefix
+		// Insert sorted by prefix (using IP comparison on the prefix IP part)
 		idx := sort.Search(len(m.subnets), func(i int) bool {
-			return m.subnets[i].Prefix >= prefix
+			pIP := net.ParseIP(strings.SplitN(m.subnets[i].Prefix, "/", 2)[0])
+			qIP := net.ParseIP(strings.SplitN(prefix, "/", 2)[0])
+			if pIP == nil || qIP == nil {
+				return m.subnets[i].Prefix >= prefix
+			}
+			return bytes.Compare(pIP.To16(), qIP.To16()) >= 0
 		})
 		m.subnets = append(m.subnets, nil)
 		copy(m.subnets[idx+1:], m.subnets[idx:])
 		m.subnets[idx] = sn
 	}
 
-	hn, ok := sn.HostMap[ipU32]
+	hn, ok := sn.HostMap[ipStr]
 	if !ok {
-		hn = &hostNode{IP: ipU32, IPStr: ipStr}
-		sn.HostMap[ipU32] = hn
+		hn = &hostNode{IPStr: ipStr}
+		sn.HostMap[ipStr] = hn
 		// Insert sorted by IP
 		idx := sort.Search(len(sn.Hosts), func(i int) bool {
-			return sn.Hosts[i].IP >= ipU32
+			return !ipStrLess(sn.Hosts[i].IPStr, ipStr)
 		})
 		sn.Hosts = append(sn.Hosts, nil)
 		copy(sn.Hosts[idx+1:], sn.Hosts[idx:])
@@ -580,6 +627,98 @@ func (m *Model) updateTreeData(ipStr string, port uint16, proto string, ttl uint
 		copy(hn.Ports[idx+1:], hn.Ports[idx:])
 		hn.Ports[idx] = pe
 		sn.Count++
+	}
+}
+
+// ── Service view update ──────────────────────────────────────────────
+
+func portCategory(port uint16) string {
+	switch port {
+	case 80, 443, 8080, 8443:
+		return "HTTP"
+	case 22:
+		return "SSH"
+	case 21:
+		return "FTP"
+	case 25, 465, 587:
+		return "SMTP"
+	case 110, 995:
+		return "POP3"
+	case 143, 993:
+		return "IMAP"
+	case 53:
+		return "DNS"
+	case 23:
+		return "Telnet"
+	case 3306:
+		return "MySQL"
+	case 5432:
+		return "PostgreSQL"
+	case 1433:
+		return "MSSQL"
+	case 27017:
+		return "MongoDB"
+	case 6379:
+		return "Redis"
+	case 3389:
+		return "RDP"
+	case 445:
+		return "SMB"
+	case 139:
+		return "NetBIOS"
+	default:
+		return fmt.Sprintf("Port %d", port)
+	}
+}
+
+func (m *Model) updateServiceData(ipStr string, port uint16, proto string, service string) {
+	cat := portCategory(port)
+
+	sn, ok := m.serviceMap[cat]
+	if !ok {
+		sn = &serviceNode{
+			Name:    cat,
+			PortMap: make(map[string]*portSummary),
+		}
+		m.serviceMap[cat] = sn
+		// Insert sorted by name
+		idx := sort.Search(len(m.services), func(i int) bool {
+			return m.services[i].Name >= cat
+		})
+		m.services = append(m.services, nil)
+		copy(m.services[idx+1:], m.services[idx:])
+		m.services[idx] = sn
+	}
+
+	portKey := fmt.Sprintf("%d/%s", port, proto)
+	ps, ok := sn.PortMap[portKey]
+	if !ok {
+		ps = &portSummary{
+			Port:    port,
+			Proto:   proto,
+			Servers: make(map[string]int),
+			hostSet: make(map[string]bool),
+		}
+		sn.PortMap[portKey] = ps
+		sn.Ports = append(sn.Ports, ps)
+		sort.Slice(sn.Ports, func(i, j int) bool {
+			return sn.Ports[i].Port < sn.Ports[j].Port
+		})
+	}
+
+	// Count unique hosts
+	if !ps.hostSet[ipStr] {
+		ps.hostSet[ipStr] = true
+		ps.Count++
+		sn.Total++
+		if len(ps.Hosts) < 100 {
+			ps.Hosts = append(ps.Hosts, ipStr)
+		}
+	}
+
+	// Update server info
+	if service != "" {
+		ps.Servers[service]++
 	}
 }
 
@@ -761,8 +900,8 @@ func (m Model) View() string {
 	// Line 3: filter tabs + search
 	m.renderFilterBar(&b, w)
 
-	if m.heatmapMode {
-		m.renderHeatmap(&b, w)
+	if m.serviceMode {
+		m.renderServiceView(&b, w)
 		m.renderHelp(&b, w)
 	} else if m.treeMode {
 		m.renderTreeView(&b, w)
@@ -1004,11 +1143,11 @@ func (m Model) renderDetail(b *strings.Builder, w int) {
 func (m Model) renderHelp(b *strings.Builder, w int) {
 	var help string
 	if m.treeMode {
-		help = " q:quit  ↑↓/jk:scroll  enter:expand  t:flat  h:heatmap  1-3:filter  /:search"
-	} else if m.heatmapMode {
-		help = " q:quit  h:close  t:tree  1-3:filter  /:search  f:follow"
+		help = " q:quit  ↑↓/jk:scroll  enter:expand  t:flat  s:services  1-3:filter  /:search"
+	} else if m.serviceMode {
+		help = " q:quit  ↑↓/jk:scroll  enter:expand  s:close  t:tree  1-3:filter  /:search"
 	} else {
-		help = " q:quit  ↑↓/jk:scroll  g/G:top/end  1-3:filter  /:search  f:follow  t:tree  h:heatmap"
+		help = " q:quit  ↑↓/jk:scroll  g/G:top/end  1-3:filter  /:search  f:follow  t:tree  s:services"
 	}
 	b.WriteString(styleHelp.Render(truncStr(help, w)))
 }
@@ -1153,7 +1292,7 @@ func (m Model) renderTreeView(b *strings.Builder, w int) {
 			hostCount := len(sn.Hosts)
 			osSummary := subnetOSSummary(sn)
 			text = fmt.Sprintf(" %s %s          %d hosts  %d open%s",
-				arrow, padRight(sn.Label, 22), hostCount, sn.Count, osSummary)
+				arrow, padRight(sn.Prefix, 22), hostCount, sn.Count, osSummary)
 			if isCursor {
 				b.WriteString(styleAccent.Render("▸") + styleCursor.Render(truncStr(text, w-2)) + "\n")
 			} else {
@@ -1226,99 +1365,236 @@ func (m Model) renderTreeView(b *strings.Builder, w int) {
 	b.WriteString(styleSep.Render(" " + strings.Repeat("─", w-2)) + "\n")
 }
 
-// ── Heatmap View ─────────────────────────────────────────────────────
+// ── Service Portfolio View ────────────────────────────────────────────
 
-func (m Model) renderHeatmap(b *strings.Builder, w int) {
-	vis := m.height - 8 // leave room for header, progress, histogram, filter, help
-	if vis < 4 {
-		vis = 4
-	}
+type svcLineType int
 
-	if len(m.subnets) == 0 {
-		b.WriteString(styleDim.Render(" (no data for heatmap)") + "\n")
-		for i := 1; i < vis; i++ {
-			b.WriteString("\n")
+const (
+	svcLineService svcLineType = iota
+	svcLinePort
+	svcLineHost
+)
+
+type svcLine struct {
+	Type    svcLineType
+	Service *serviceNode
+	Port    *portSummary
+	Host    string
+}
+
+func (m Model) svcLineCount() int {
+	count := 0
+	for _, sn := range m.services {
+		count++ // service line
+		if sn.Expanded {
+			for _, ps := range sn.Ports {
+				count++ // port line
+				if ps.Expanded {
+					count += len(ps.Hosts)
+				}
+			}
 		}
+	}
+	return count
+}
+
+func (m Model) flattenSvcLines() []svcLine {
+	var lines []svcLine
+	for _, sn := range m.services {
+		lines = append(lines, svcLine{Type: svcLineService, Service: sn})
+		if sn.Expanded {
+			for _, ps := range sn.Ports {
+				lines = append(lines, svcLine{Type: svcLinePort, Service: sn, Port: ps})
+				if ps.Expanded {
+					for _, h := range ps.Hosts {
+						lines = append(lines, svcLine{Type: svcLineHost, Service: sn, Port: ps, Host: h})
+					}
+				}
+			}
+		}
+	}
+	return lines
+}
+
+func (m *Model) toggleSvcNode() {
+	lines := m.flattenSvcLines()
+	if m.svcCursor < 0 || m.svcCursor >= len(lines) {
+		return
+	}
+	line := lines[m.svcCursor]
+	switch line.Type {
+	case svcLineService:
+		line.Service.Expanded = !line.Service.Expanded
+	case svcLinePort:
+		line.Port.Expanded = !line.Port.Expanded
+	}
+}
+
+func (m *Model) ensureSvcVisible(vis int) {
+	if vis <= 0 {
+		vis = 1
+	}
+	if m.svcCursor < m.svcOffset {
+		m.svcOffset = m.svcCursor
+	}
+	if m.svcCursor >= m.svcOffset+vis {
+		m.svcOffset = m.svcCursor - vis + 1
+	}
+}
+
+// updateService handles keybindings in service portfolio mode.
+func (m Model) updateService(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	totalLines := m.svcLineCount()
+	vis := m.visibleRows()
+	switch msg.String() {
+	case "j", "down":
+		if m.svcCursor < totalLines-1 {
+			m.svcCursor++
+		}
+		m.ensureSvcVisible(vis)
+	case "k", "up":
+		if m.svcCursor > 0 {
+			m.svcCursor--
+		}
+		m.ensureSvcVisible(vis)
+	case "pgdown", "ctrl+d":
+		m.svcCursor += vis
+		if m.svcCursor >= totalLines {
+			m.svcCursor = totalLines - 1
+		}
+		if m.svcCursor < 0 {
+			m.svcCursor = 0
+		}
+		m.ensureSvcVisible(vis)
+	case "pgup", "ctrl+u":
+		m.svcCursor -= vis
+		if m.svcCursor < 0 {
+			m.svcCursor = 0
+		}
+		m.ensureSvcVisible(vis)
+	case "g", "home":
+		m.svcCursor = 0
+		m.svcOffset = 0
+	case "G", "end":
+		m.svcCursor = totalLines - 1
+		if m.svcCursor < 0 {
+			m.svcCursor = 0
+		}
+		m.ensureSvcVisible(vis)
+	case "enter", " ":
+		m.toggleSvcNode()
+	case "esc":
+		if m.searchText != "" {
+			m.searchText = ""
+			m.rebuildFiltered()
+			m.clampCursor()
+		}
+	}
+	return m, nil
+}
+
+// serverSummary returns a compact server distribution string for a port summary.
+func serverSummary(ps *portSummary) string {
+	if len(ps.Servers) == 0 {
+		return ""
+	}
+	type svCount struct {
+		name  string
+		count int
+	}
+	sorted := make([]svCount, 0, len(ps.Servers))
+	for n, c := range ps.Servers {
+		sorted = append(sorted, svCount{n, c})
+	}
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].count > sorted[j].count
+	})
+	if len(sorted) > 4 {
+		sorted = sorted[:4]
+	}
+	var parts []string
+	for _, sc := range sorted {
+		parts = append(parts, fmt.Sprintf("%s:%d", sc.name, sc.count))
+	}
+	return "  [" + strings.Join(parts, "  ") + "]"
+}
+
+func (m Model) renderServiceView(b *strings.Builder, w int) {
+	vis := m.visibleRows()
+	lines := m.flattenSvcLines()
+
+	if len(lines) == 0 {
+		b.WriteString(styleDim.Render(" (no service data)") + "\n")
+		for i := 1; i < vis; i++ {
+			b.WriteString(styleDim.Render(" ~") + "\n")
+		}
+		b.WriteString(styleSep.Render(" " + strings.Repeat("─", w-2)) + "\n")
 		return
 	}
 
-	// Determine grid dimensions: 16 columns, up to vis rows
-	cols := 16
-	if cols*3+8 > w { // 3 chars per cell + row label
-		cols = (w - 8) / 3
-		if cols < 4 {
-			cols = 4
-		}
-	}
-	rows := vis - 3 // header + column labels + padding
-	if rows > 16 {
-		rows = 16
-	}
-	if rows < 1 {
-		rows = 1
+	end := m.svcOffset + vis
+	if end > len(lines) {
+		end = len(lines)
 	}
 
-	// Build a list of all /24 prefixes with counts
-	type heatCell struct {
-		prefix uint32
-		count  int
-	}
-	var cells []heatCell
-	for _, sn := range m.subnets {
-		cells = append(cells, heatCell{sn.Prefix, sn.Count})
-	}
+	for i := m.svcOffset; i < end; i++ {
+		line := lines[i]
+		isCursor := (i == m.svcCursor)
+		var text string
 
-	totalCells := rows * cols
-	if len(cells) > totalCells {
-		cells = cells[:totalCells]
-	}
-
-	// Header
-	b.WriteString(styleAccent.Render(" Subnet Heatmap") + styleDim.Render(fmt.Sprintf("  (%d subnets)", len(m.subnets))) + "\n")
-
-	// Column labels
-	colHeader := "        "
-	for c := 0; c < cols && c < len(cells); c++ {
-		colHeader += fmt.Sprintf("%-3d", c)
-	}
-	b.WriteString(styleDim.Render(truncStr(colHeader, w)) + "\n")
-
-	// Grid
-	idx := 0
-	for r := 0; r < rows; r++ {
-		rowStr := fmt.Sprintf(" %3d  ", r)
-		hasContent := false
-		for c := 0; c < cols; c++ {
-			if idx < len(cells) {
-				cell := cells[idx]
-				idx++
-				if cell.count > 10 {
-					rowStr += styleHeatHigh.Render("██ ")
-					hasContent = true
-				} else if cell.count >= 3 {
-					rowStr += styleHeatMed.Render("██ ")
-					hasContent = true
-				} else if cell.count >= 1 {
-					rowStr += styleHeatLow.Render("░░ ")
-					hasContent = true
-				} else {
-					rowStr += styleHeatNone.Render("·· ")
-				}
+		switch line.Type {
+		case svcLineService:
+			sn := line.Service
+			arrow := "▶"
+			if sn.Expanded {
+				arrow = "▼"
+			}
+			text = fmt.Sprintf(" %s %s (%d hosts)", arrow, sn.Name, sn.Total)
+			if isCursor {
+				b.WriteString(styleAccent.Render("▸") + styleCursor.Render(truncStr(text, w-2)) + "\n")
 			} else {
-				rowStr += "   "
+				b.WriteString(styleServiceCat.Render(truncStr(text, w)) + "\n")
+			}
+
+		case svcLinePort:
+			ps := line.Port
+			arrow := "▶"
+			if ps.Expanded {
+				arrow = "▼"
+			}
+			svSum := serverSummary(ps)
+			text = fmt.Sprintf("   %s %d/%s (%d)%s", arrow, ps.Port, ps.Proto, ps.Count, svSum)
+			if isCursor {
+				b.WriteString(styleAccent.Render("▸") + styleCursor.Render(truncStr(text, w-2)) + "\n")
+			} else {
+				b.WriteString(styleOpen.Render(truncStr(text, w)) + "\n")
+			}
+
+		case svcLineHost:
+			ps := line.Port
+			host := line.Host
+			// Show server info for this host if available
+			svcInfo := ""
+			// Look up the banner for this host:port in rows
+			key := rowKey(host, ps.Port, ps.Proto)
+			if row, ok := m.rows[key]; ok && row.Service != "" {
+				svcInfo = "  " + row.Service
+				if ban := cleanBannerOneLine(row.Banner, w-40); ban != "" {
+					svcInfo += "  " + ban
+				}
+			}
+			text = fmt.Sprintf("       <- %s%s", host, svcInfo)
+			if isCursor {
+				b.WriteString(styleAccent.Render("▸") + styleCursor.Render(truncStr(text, w-2)) + "\n")
+			} else {
+				b.WriteString(styleHostRef.Render(truncStr(text, w)) + "\n")
 			}
 		}
-		if hasContent || r == 0 {
-			b.WriteString(truncStr(rowStr, w) + "\n")
-		} else {
-			b.WriteString("\n")
-		}
 	}
 
-	// Fill remaining
-	linesUsed := 2 + rows // header + col header + grid rows
-	for i := linesUsed; i < vis; i++ {
-		b.WriteString("\n")
+	// Fill empty space
+	for i := end - m.svcOffset; i < vis; i++ {
+		b.WriteString(styleDim.Render(" ~") + "\n")
 	}
 
 	// Separator
@@ -1452,29 +1728,38 @@ func truncStr(s string, w int) string {
 
 type TextPrinter struct {
 	Verbose bool
+	Out     io.Writer // defaults to os.Stdout
+}
+
+func (p *TextPrinter) out() io.Writer {
+	if p.Out != nil {
+		return p.Out
+	}
+	return os.Stdout
 }
 
 func (p *TextPrinter) PrintEvent(ev ScanEvent) {
+	w := p.out()
 	switch ev.Type {
 	case EvtOpen:
-		fmt.Printf("\n[+] OPEN: %s:%d (%s)\n", ev.IP, ev.Port, ev.Proto)
+		fmt.Fprintf(w, "\n[+] OPEN: %s:%d (%s)\n", ev.IP, ev.Port, ev.Proto)
 	case EvtBanner:
 		ban := cleanBannerOneLine(ev.Banner, 120)
 		if ev.Probe != "" {
-			fmt.Printf("\n[*] BANNER: %s:%d (%s) [%s] %s\n", ev.IP, ev.Port, ev.Proto, ev.Probe, ban)
+			fmt.Fprintf(w, "\n[*] BANNER: %s:%d (%s) [%s] %s\n", ev.IP, ev.Port, ev.Proto, ev.Probe, ban)
 		} else {
-			fmt.Printf("\n[*] BANNER: %s:%d (%s) %s\n", ev.IP, ev.Port, ev.Proto, ban)
+			fmt.Fprintf(w, "\n[*] BANNER: %s:%d (%s) %s\n", ev.IP, ev.Port, ev.Proto, ban)
 		}
 	case EvtTimeout:
 		if p.Verbose {
-			fmt.Printf("\n[-] TIMEOUT: %s:%d (%s)\n", ev.IP, ev.Port, ev.Proto)
+			fmt.Fprintf(w, "\n[-] TIMEOUT: %s:%d (%s)\n", ev.IP, ev.Port, ev.Proto)
 		}
 	case EvtInfo:
-		fmt.Printf("%s\n", ev.Msg)
+		fmt.Fprintf(w, "%s\n", ev.Msg)
 	}
 }
 
 func (p *TextPrinter) PrintStats(s ScanStats) {
-	fmt.Printf("\rPPS: %.0f | Sent: %d | Recv: %d | Open: %d | Drops: %d",
+	fmt.Fprintf(p.out(), "\rPPS: %.0f | Sent: %d | Recv: %d | Open: %d | Drops: %d",
 		s.Rate, s.Sent, s.Recv, s.Open, s.Drops)
 }
