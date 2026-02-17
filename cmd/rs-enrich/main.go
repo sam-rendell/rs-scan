@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -22,6 +23,8 @@ func main() {
 		outputFile  string
 		recogDir    string
 		nucleiDir   string
+		cveDB       string
+		kevFile     string
 		verbose     bool
 		passThrough bool
 		cpuprofile  string
@@ -32,6 +35,8 @@ func main() {
 	flag.StringVar(&outputFile, "o", "", "output JSONL file (default stdout)")
 	flag.StringVar(&recogDir, "r", "", "recog XML directory")
 	flag.StringVar(&nucleiDir, "n", "", "nuclei templates directory")
+	flag.StringVar(&cveDB, "cve-db", "", "NVD CVE JSON feed directory")
+	flag.StringVar(&kevFile, "kev", "", "CISA KEV catalog JSON file")
 	flag.BoolVar(&verbose, "v", false, "verbose: log match stats to stderr")
 	flag.BoolVar(&passThrough, "pass-through", true, "pass OPEN/TIMEOUT events unchanged")
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "write CPU profile to file")
@@ -79,6 +84,21 @@ func main() {
 		}
 		if verbose {
 			fmt.Fprintf(os.Stderr, "loaded %d nuclei templates\n", len(nucleiTemplates))
+		}
+	}
+
+	// Load CVE lookup
+	var cveLookup *enrich.CVELookup
+	if cveDB != "" || kevFile != "" {
+		var err error
+		cveLookup, err = enrich.NewCVELookup(cveDB, kevFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error loading CVE data: %v\n", err)
+			os.Exit(1)
+		}
+		if verbose {
+			fmt.Fprintf(os.Stderr, "loaded CVE database: %d vendor:product keys, %d KEV entries\n",
+				cveLookup.Size(), cveLookup.KEVCount())
 		}
 	}
 
@@ -212,6 +232,30 @@ func main() {
 					record["nuclei_ids"] = result.NucleiIDs
 				}
 
+				// CVE lookup if CPE is available
+				if cveLookup != nil && result.ServiceCPE != "" {
+					cves := cveLookup.LookupByCPE(result.ServiceCPE)
+					if len(cves) > 0 {
+						// Add vulns array
+						record["vulns"] = cves
+
+						// Add exploits array for KEV entries
+						var exploits []map[string]string
+						for _, cve := range cves {
+							if cve.KEV {
+								exploits = append(exploits, map[string]string{
+									"source": "kev",
+									"id":     cve.ID,
+									"title":  cve.Description,
+								})
+							}
+						}
+						if len(exploits) > 0 {
+							record["exploits"] = exploits
+						}
+					}
+				}
+
 				writeJSON(record)
 			}
 		}()
@@ -226,6 +270,113 @@ func main() {
 		if len(line) == 0 {
 			continue
 		}
+
+		// Sentinel: if line contains "__flush", drain workers and echo it back
+		if bytes.Contains(line, []byte(`"__flush"`)) {
+			// Drain in-flight work
+			close(work)
+			wg.Wait()
+
+			// Echo sentinel and flush
+			outMu.Lock()
+			bw.Write(line)
+			bw.WriteByte('\n')
+			bw.Flush()
+			outMu.Unlock()
+
+			// Reopen work channel and restart workers
+			work = make(chan workItem, workers*64)
+			for range workers {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					for item := range work {
+						total.Add(1)
+
+						var record map[string]any
+						if err := json.Unmarshal(item.line, &record); err != nil {
+							writeRaw(string(item.line))
+							continue
+						}
+
+						event, _ := record["event"].(string)
+
+						if event != "BANNER" {
+							if passThrough {
+								writeJSON(record)
+							}
+							continue
+						}
+
+						banners.Add(1)
+
+						banner, _ := record["banner"].(string)
+						portFloat, _ := record["port"].(float64)
+						port := uint16(portFloat)
+						proto, _ := record["proto"].(string)
+
+						result := router.Enrich(banner, port, proto)
+						if result == nil {
+							unmatched.Add(1)
+							writeJSON(record)
+							continue
+						}
+
+						matched.Add(1)
+
+						if strings.HasPrefix(result.Source, "recog:") {
+							recogHit.Add(1)
+						}
+						if len(result.NucleiIDs) > 0 {
+							nucleiHit.Add(1)
+						}
+
+						setIfNonEmpty(record, "service_vendor", result.ServiceVendor)
+						setIfNonEmpty(record, "service_product", result.ServiceProduct)
+						setIfNonEmpty(record, "service_version", result.ServiceVersion)
+						setIfNonEmpty(record, "service_cpe", result.ServiceCPE)
+						setIfNonEmpty(record, "os_vendor", result.OSVendor)
+						setIfNonEmpty(record, "os_product", result.OSProduct)
+						setIfNonEmpty(record, "os_version", result.OSVersion)
+						setIfNonEmpty(record, "os_family", result.OSFamily)
+						setIfNonEmpty(record, "os_device", result.OSDevice)
+						setIfNonEmpty(record, "hw_vendor", result.HWVendor)
+						setIfNonEmpty(record, "hw_product", result.HWProduct)
+						setIfNonEmpty(record, "description", result.Description)
+						setIfNonEmpty(record, "matched_by", result.Source)
+
+						if len(result.NucleiIDs) > 0 {
+							record["nuclei_ids"] = result.NucleiIDs
+						}
+
+						// CVE lookup if CPE is available
+						if cveLookup != nil && result.ServiceCPE != "" {
+							cves := cveLookup.LookupByCPE(result.ServiceCPE)
+							if len(cves) > 0 {
+								record["vulns"] = cves
+								var exploits []map[string]string
+								for _, cve := range cves {
+									if cve.KEV {
+										exploits = append(exploits, map[string]string{
+											"source": "kev",
+											"id":     cve.ID,
+											"title":  cve.Description,
+										})
+									}
+								}
+								if len(exploits) > 0 {
+									record["exploits"] = exploits
+								}
+							}
+						}
+
+						writeJSON(record)
+					}
+				}()
+			}
+			continue
+		}
+
 		// Copy line since scanner reuses buffer
 		cp := make([]byte, len(line))
 		copy(cp, line)
